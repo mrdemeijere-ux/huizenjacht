@@ -1,24 +1,10 @@
 import React, { useEffect, useMemo, useState } from "react";
 
 // Huizenjacht – single-file MVP (React + Tailwind + Firestore realtime sync)
-// New in this version:
 // - Firebase Auth (anonymous) + Firestore realtime sync per "Board"
 // - Create/Join board, copy invite link, live multi-device updates
 // - Offline support via Firestore IndexedDB persistence
 // - Backward compatible: if no board selected, localStorage works as before
-//
-// How to enable Firebase:
-// 1) Create a Firebase project, enable Authentication (Anonymous) and Firestore.
-// 2) Add your web app and paste config below.
-// 3) In Firebase Auth → Settings → Authorized domains: add your Vercel domain.
-// 4) Suggested Firestore rules (minimal):
-//    rules_version = '2';
-//    service cloud.firestore { match /databases/{database}/documents { 
-//      match /boards/{boardId} {
-//        allow read, write: if request.auth != null; // anonymous users okay
-//        match /items/{itemId} { allow read, write: if request.auth != null; }
-//      }
-//    }}
 
 // ===================== Firebase setup =====================
 import { initializeApp } from "firebase/app";
@@ -39,38 +25,33 @@ import {
 } from "firebase/firestore";
 import { getAuth, onAuthStateChanged, signInAnonymously } from "firebase/auth";
 
-// 🔧 REPLACE with your own Firebase config
+// 🔧 REPLACE with your own Firebase config (or use Vite env vars)
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_PROJECT.firebaseapp.com",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_PROJECT.appspot.com",
-  messagingSenderId: "YOUR_SENDER_ID",
-  appId: "YOUR_APP_ID",
+  apiKey: import.meta?.env?.VITE_FIREBASE_API_KEY || "AIzaSyAixsEtpf-ZxVEXENyDFdljLVj5jH5Wloo",
+  authDomain: import.meta?.env?.VITE_FIREBASE_AUTH_DOMAIN || "huizenjacht-550d8.firebaseapp.com",
+  projectId: import.meta?.env?.VITE_FIREBASE_PROJECT_ID || "huizenjacht-550d8",
+  storageBucket: import.meta?.env?.VITE_FIREBASE_STORAGE_BUCKET || "huizenjacht-550d8.firebasestorage.app",
+  messagingSenderId: import.meta?.env?.VITE_FIREBASE_MESSAGING_SENDER_ID || "460752433385",
+  appId: import.meta?.env?.VITE_FIREBASE_APP_ID || "1:460752433385:web:6aec831191354c0c608078",
 };
+
+function isFirebaseConfigured(cfg) {
+  const vals = Object.values(cfg || {});
+  return vals.every((v) => typeof v === "string" && v && !String(v).startsWith("YOUR_"));
+}
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
 
-// Enable offline persistence
+// Enable offline persistence (best effort)
 enableIndexedDbPersistence(db).catch((e) => {
   console.warn("IndexedDB persistence not enabled:", e?.code || e);
 });
 
-// ===================== App state & helpers =====================
+// ===================== Constants =====================
 const STORAGE_KEY = "huizenjacht_v1";
 const BOARD_KEY = "huizenjacht_board_id";
-
-// Safe UUID helper for older browsers
-function uuid() {
-  try {
-    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
-      return crypto.randomUUID();
-    }
-  } catch {}
-  return `id-${Math.random().toString(36).slice(2)}-${Date.now().toString(36)}`;
-}
 
 const STATUS_OPTIONS = [
   { value: "interessant", label: "Interessant" },
@@ -79,6 +60,16 @@ const STATUS_OPTIONS = [
   { value: "bezichtigd", label: "Bezichtigd" },
   { value: "verkocht", label: "Verkocht" },
 ];
+
+// ===================== Helpers =====================
+function uuid() {
+  try {
+    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+      return crypto.randomUUID();
+    }
+  } catch {}
+  return `id-${Math.random().toString(36).slice(2)}-${Date.now().toString(36)}`;
+}
 
 function useLocalStorageState(initialValue) {
   const [state, setState] = useState(() => {
@@ -116,7 +107,7 @@ function badgeClass(status) {
     case "verkocht":
       return `${base} bg-zinc-200 text-zinc-800 line-through`;
     default:
-      return `${base} bg-zinc-100 text-zinc-800`;
+      return `${base} bg-zinc-100 text-slate-800`;
   }
 }
 
@@ -145,7 +136,7 @@ function emptyForm() {
     country: "France",
     lat: "",
     lng: "",
-    agencyName: "",
+    agencyName: "", // Makelaardij
     agentName: "",
     agentPhone: "",
     agentEmail: "",
@@ -159,25 +150,18 @@ function emptyForm() {
 function buildGoogleMapsUrl(item) {
   const hasCoords = item.lat && item.lng;
   if (hasCoords) {
-    return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
-      `${item.lat},${item.lng}`
-    )}`;
+    return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${item.lat},${item.lng}`)}`;
   }
-  const q = [item.address, item.postalCode, item.city, item.country]
-    .filter(Boolean)
-    .join(", ");
+  const q = [item.address, item.postalCode, item.city, item.country].filter(Boolean).join(", ");
   return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(q)}`;
 }
 
 function buildOsmUrl(item) {
   if (item.lat && item.lng) {
-    return `https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=${encodeURIComponent(
-      `;${item.lat},${item.lng}`
-    )}`;
+    const coords = `;${item.lat},${item.lng}`;
+    return `https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=${encodeURIComponent(coords)}`;
   }
-  const q = [item.address, item.postalCode, item.city, item.country]
-    .filter(Boolean)
-    .join(", ");
+  const q = [item.address, item.postalCode, item.city, item.country].filter(Boolean).join(", ");
   return `https://www.openstreetmap.org/search?query=${encodeURIComponent(q)}`;
 }
 
@@ -194,10 +178,7 @@ function validate(item) {
 function getUrlParts(u) {
   try {
     const url = new URL(u);
-    return {
-      host: url.hostname.replace(/^www\./, ""),
-      path: (url.pathname + url.search).replace(/\/$/, "") || "/",
-    };
+    return { host: url.hostname.replace(/^www\./, ""), path: (url.pathname + url.search).replace(/\/$/, "") || "/" };
   } catch {
     return { host: u, path: "" };
   }
@@ -212,7 +193,9 @@ function LinkPreview({ url }) {
   if (!url) return null;
   const parts = getUrlParts(url);
   const copy = async () => {
-    try { await navigator.clipboard.writeText(url); } catch {}
+    try {
+      await navigator.clipboard.writeText(url);
+    } catch {}
   };
   return (
     <div className="flex items-center justify-between gap-3 rounded-xl border bg-slate-50 px-3 py-2">
@@ -226,8 +209,12 @@ function LinkPreview({ url }) {
         </div>
       </div>
       <div className="flex shrink-0 items-center gap-2">
-        <a href={url} target="_blank" rel="noopener noreferrer" className="rounded-lg border px-2 py-1 text-xs hover:bg-white">Open</a>
-        <button onClick={copy} className="rounded-lg border px-2 py-1 text-xs hover:bg-white">Kopieer</button>
+        <a href={url} target="_blank" rel="noopener noreferrer" className="rounded-lg border px-2 py-1 text-xs hover:bg-white">
+          Open
+        </a>
+        <button onClick={copy} className="rounded-lg border px-2 py-1 text-xs hover:bg-white">
+          Kopieer
+        </button>
       </div>
     </div>
   );
@@ -244,10 +231,13 @@ function StarRating({ value = 0, onChange, size = "md", label, hint }) {
           <button
             key={n}
             type="button"
-            aria-label={`${label || "Score"} ${n} ster${n>1?"ren":""}`}
+            aria-label={`${label || "Score"} ${n} ster${n > 1 ? "ren" : ""}`}
             className={`${cls} leading-none px-0.5`}
             onClick={() => onChange?.(n)}
-            onKeyDown={(e)=>{ if(e.key==='ArrowRight') onChange?.(Math.min(5,(value||0)+1)); if(e.key==='ArrowLeft') onChange?.(Math.max(1,(value||0)-1)); }}
+            onKeyDown={(e) => {
+              if (e.key === "ArrowRight") onChange?.(Math.min(5, (value || 0) + 1));
+              if (e.key === "ArrowLeft") onChange?.(Math.max(1, (value || 0) - 1));
+            }}
           >
             <span className={n <= (value || 0) ? "" : "opacity-30"}>★</span>
           </button>
@@ -286,8 +276,9 @@ function TopStatusBar({ boardId, liveStatus }) {
   );
 }
 
+// ===================== App =====================
 export default function App() {
-  const [items, setItems] = useLocalStorageState([]); // used when no board selected
+  const [items, setItems] = useLocalStorageState([]); // local mode fallback
   const [form, setForm] = useState(emptyForm());
   const [editingId, setEditingId] = useState(null);
   const [filter, setFilter] = useState("");
@@ -295,14 +286,18 @@ export default function App() {
   const [sortBy, setSortBy] = useState("createdDesc");
   const [errors, setErrors] = useState({});
 
-  // Firebase auth
   const [user, setUser] = useState(null);
   const [boardId, setBoardId] = useState(() => {
     const urlBoard = new URLSearchParams(window.location.search).get("board");
-    return urlBoard || localStorage.getItem(BOARD_KEY) || "";
+    return urlBoard || (typeof localStorage !== "undefined" ? localStorage.getItem(BOARD_KEY) : "") || "";
   });
   const [liveStatus, setLiveStatus] = useState("offline");
+  const [syncError, setSyncError] = useState(null);
+  const [busyCreate, setBusyCreate] = useState(false);
+  const [busyJoin, setBusyJoin] = useState(false);
+  const [configOk] = useState(isFirebaseConfigured(firebaseConfig));
 
+  // Auth
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => {
       setUser(u || null);
@@ -311,24 +306,40 @@ export default function App() {
     return () => unsub();
   }, []);
 
-  // Subscribe to Firestore when a board is selected
+  // Firestore subscription
   useEffect(() => {
     if (!boardId || !user) return;
-    localStorage.setItem(BOARD_KEY, boardId);
+    if (typeof localStorage !== "undefined") {
+      localStorage.setItem(BOARD_KEY, boardId);
+    }
 
-    // Ensure board doc exists
-    setDoc(doc(db, "boards", boardId), { createdAt: serverTimestamp() }, { merge: true }).catch(()=>{});
+    // Ensure board doc exists (no-op if already there)
+    setDoc(doc(db, "boards", boardId), { createdAt: serverTimestamp() }, { merge: true }).catch(() => {});
 
-    const qRef = query(collection(db, "boards", boardId, "items"), orderBy("order", "desc"), orderBy("createdAt", "desc"));
-    const unsub = onSnapshot(qRef, (snap) => {
-      const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-      setItems(list);
-      setLiveStatus("online");
-    }, (err) => {
-      console.error("onSnapshot error", err);
-      setLiveStatus("error");
-    });
-    return () => { setLiveStatus("offline"); unsub(); };
+    const qRef = query(
+      collection(db, "boards", boardId, "items"),
+      orderBy("order", "desc") // single orderBy to avoid composite index requirement
+    );
+
+    const unsub = onSnapshot(
+      qRef,
+      (snap) => {
+        const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        setItems(list);
+        setLiveStatus("online");
+        setSyncError(null);
+      },
+      (err) => {
+        console.error("onSnapshot error", err);
+        setLiveStatus("error");
+        setSyncError(err);
+      }
+    );
+
+    return () => {
+      setLiveStatus("offline");
+      unsub();
+    };
   }, [boardId, user]);
 
   // Ensure legacy items have id (local mode only)
@@ -336,6 +347,7 @@ export default function App() {
     if (boardId) return; // skip when using Firestore
     const fixed = items.map((it) => (it.id ? it : { ...it, id: uuid() }));
     if (JSON.stringify(fixed) !== JSON.stringify(items)) setItems(fixed);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function resetForm() {
@@ -356,10 +368,7 @@ export default function App() {
       return;
     }
     try {
-      await addDoc(collection(db, "boards", boardId, "items"), {
-        ...withMeta,
-        createdAt: serverTimestamp(),
-      });
+      await addDoc(collection(db, "boards", boardId, "items"), { ...withMeta, createdAt: serverTimestamp() });
       resetForm();
     } catch (err) {
       alert("Opslaan in Firestore mislukt: " + (err?.message || String(err)));
@@ -458,7 +467,7 @@ export default function App() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `huizenjacht_${new Date().toISOString().slice(0,10)}.json`;
+    a.download = `huizenjacht_${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -489,7 +498,10 @@ export default function App() {
   }
 
   function copyBoardLink() {
-    if (!boardId) return alert("Geen board actief. Maak of join eerst een board.");
+    if (!boardId) {
+      alert("Geen board actief. Maak of join eerst een board.");
+      return;
+    }
     const url = `${window.location.origin}${window.location.pathname}?board=${encodeURIComponent(boardId)}`;
     if (navigator.clipboard?.writeText) {
       navigator.clipboard.writeText(url).then(() => alert("Board-link gekopieerd"));
@@ -499,12 +511,21 @@ export default function App() {
   }
 
   async function createBoard() {
+    if (!configOk) {
+      alert("Firebase config ontbreekt of is nog niet ingevuld. Vul je firebaseConfig of env vars.");
+      return;
+    }
+    setBusyCreate(true);
     const newId = uuid().replace(/[^a-zA-Z0-9_-]/g, "");
     try {
-      await setDoc(doc(db, "boards", newId), { createdAt: serverTimestamp() });
+      if (!auth.currentUser) {
+        await signInAnonymously(auth);
+      }
+      await setDoc(doc(db, "boards", newId), { owner: auth.currentUser?.uid || null, createdAt: serverTimestamp() });
       setBoardId(newId);
-      localStorage.setItem(BOARD_KEY, newId);
-      // Migrate local items (if any)
+      if (typeof localStorage !== "undefined") {
+        localStorage.setItem(BOARD_KEY, newId);
+      }
       if (items && items.length) {
         const batch = writeBatch(db);
         const colRef = collection(db, "boards", newId, "items");
@@ -516,7 +537,10 @@ export default function App() {
       }
       alert("Board aangemaakt en (eventueel) lokale items gemigreerd.");
     } catch (e) {
+      console.error("createBoard failed", e);
       alert("Board maken faalde: " + (e?.message || String(e)));
+    } finally {
+      setBusyCreate(false);
     }
   }
 
@@ -524,7 +548,9 @@ export default function App() {
     const id = prompt("Voer Board ID in (van gedeelde link)", "");
     if (!id) return;
     setBoardId(id.trim());
-    localStorage.setItem(BOARD_KEY, id.trim());
+    if (typeof localStorage !== "undefined") {
+      localStorage.setItem(BOARD_KEY, id.trim());
+    }
   }
 
   const visible = useMemo(() => {
@@ -532,7 +558,18 @@ export default function App() {
     if (filter.trim()) {
       const q = filter.toLowerCase();
       v = v.filter((it) =>
-        [it.title, it.address, it.city, it.postalCode, it.country, it.agencyName, it.agentName, it.agentEmail, it.agentPhone, it.notes]
+        [
+          it.title,
+          it.address,
+          it.city,
+          it.postalCode,
+          it.country,
+          it.agencyName,
+          it.agentName,
+          it.agentEmail,
+          it.agentPhone,
+          it.notes,
+        ]
           .filter(Boolean)
           .join(" ")
           .toLowerCase()
@@ -550,9 +587,16 @@ export default function App() {
 
   function formatViewing(dt) {
     if (!dt) return "";
-    try { const asDate = new Date(dt); if (!isNaN(asDate)) return asDate.toLocaleString(); return dt; } catch { return dt; }
+    try {
+      const asDate = new Date(dt);
+      if (!isNaN(asDate)) return asDate.toLocaleString();
+      return dt;
+    } catch {
+      return dt;
+    }
   }
 
+  // ===================== Render =====================
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white text-slate-900">
       <TopStatusBar boardId={boardId} liveStatus={liveStatus} />
@@ -580,18 +624,29 @@ export default function App() {
         <section className="mb-4 flex flex-wrap items-center gap-2">
           {!boardId && (
             <>
-              <button onClick={createBoard} className="rounded-2xl bg-slate-900 px-4 py-2 text-white shadow hover:opacity-90">Nieuw board</button>
-              <button onClick={joinBoardPrompt} className="rounded-2xl border px-4 py-2 shadow-sm">Board joinen</button>
+              <button onClick={createBoard} disabled={busyCreate || !configOk} className="rounded-2xl bg-slate-900 px-4 py-2 text-white shadow hover:opacity-90 disabled:opacity-50">{busyCreate ? "Aanmaken…" : "Nieuw board"}</button>
+              <button onClick={joinBoardPrompt} disabled={busyJoin} className="rounded-2xl border px-4 py-2 shadow-sm disabled:opacity-50">Board joinen</button>
+              {!configOk && (<span className="text-sm text-rose-700">⚠️ Firebase config ontbreekt. Vul je config in App.jsx of zet env vars.</span>)}
               <span className="text-sm text-slate-600">(zonder board werk je lokaal op dit apparaat)</span>
             </>
           )}
           {boardId && (
             <>
-              <button onClick={()=>{localStorage.removeItem(BOARD_KEY); setBoardId("");}} className="rounded-2xl border px-4 py-2 shadow-sm">Board verlaten</button>
+              <button onClick={() => { if (typeof localStorage !== "undefined") localStorage.removeItem(BOARD_KEY); setBoardId(""); }} className="rounded-2xl border px-4 py-2 shadow-sm">Board verlaten</button>
               <button onClick={copyBoardLink} className="rounded-2xl border px-4 py-2 shadow-sm">Deel invite-link</button>
             </>
           )}
         </section>
+
+        {syncError && (
+          <div className="mb-4 rounded-xl border border-rose-300 bg-rose-50 p-3 text-sm text-rose-900">
+            <div className="font-semibold">Sync fout</div>
+            <div className="mt-1"><code className="rounded bg-white/60 px-1">{syncError.code || "unknown"}</code> · {syncError.message || String(syncError)}</div>
+            {syncError?.code === "failed-precondition" && (
+              <div className="mt-2 text-xs">Tip: maak de Firestore index aan voor <code>items</code> met velden <code>order (desc)</code> en <code>createdAt (desc)</code> via de link in de Console, of laat het zo – de app gebruikt nu een fallback sortering zonder index.</div>
+            )}
+          </div>
+        )}
 
         {!boardId && (
           <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
@@ -603,86 +658,88 @@ export default function App() {
         {/* Form */}
         <section className="mb-8 rounded-2xl border bg-white p-4 shadow-sm">
           <h2 className="mb-3 text-lg font-semibold">{isEditing ? "Woning bewerken" : "Nieuwe woning toevoegen"}</h2>
-          <form onSubmit={isEditing ? (e)=>{e.preventDefault(); saveEdit();} : handleSubmit} className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <form onSubmit={isEditing ? (e) => { e.preventDefault(); saveEdit(); } : handleSubmit} className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div>
               <label className="text-sm font-medium">Titel / Naam woning<span className="text-rose-600">*</span></label>
-              <input className={`mt-1 w-full rounded-xl border px-3 py-2 ${errors.title?"border-rose-400":''}`} placeholder="Bijv. Charmehuisje bij Dijon" value={form.title} onChange={(e)=>setForm({...form, title:e.target.value})} />
+              <input className={`mt-1 w-full rounded-xl border px-3 py-2 ${errors.title ? "border-rose-400" : ""}`} placeholder="Bijv. Charmehuisje bij Dijon" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
               {errors.title && <p className="text-xs text-rose-600">{errors.title}</p>}
             </div>
             <div>
               <label className="text-sm font-medium">Link naar woning<span className="text-rose-600">*</span></label>
-              <input className={`mt-1 w-full rounded-xl border px-3 py-2 ${errors.url?"border-rose-400":''}`} placeholder="https://..." value={form.url} onChange={(e)=>setForm({...form, url:e.target.value})} />
+              <input className={`mt-1 w-full rounded-xl border px-3 py-2 ${errors.url ? "border-rose-400" : ""}`} placeholder="https://..." value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} />
               {errors.url && <p className="text-xs text-rose-600">{errors.url}</p>}
             </div>
 
             <div className="md:col-span-2 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <div>
                 <label className="text-sm font-medium">Adres<span className="text-rose-600">*</span></label>
-                <input className={`mt-1 w-full rounded-xl border px-3 py-2 ${errors.address?"border-rose-400":''}`} placeholder="Rue de ... 12" value={form.address} onChange={(e)=>setForm({...form, address:e.target.value})} />
+                <input className={`mt-1 w-full rounded-xl border px-3 py-2 ${errors.address ? "border-rose-400" : ""}`} placeholder="Rue de ... 12" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
                 {errors.address && <p className="text-xs text-rose-600">{errors.address}</p>}
               </div>
               <div>
                 <label className="text-sm font-medium">Postcode<span className="text-rose-600 opacity-0">*</span></label>
-                <input className="mt-1 w-full rounded-xl border px-3 py-2" placeholder="75001" value={form.postalCode} onChange={(e)=>setForm({...form, postalCode:e.target.value})} />
+                <input className="mt-1 w-full rounded-xl border px-3 py-2" placeholder="75001" value={form.postalCode} onChange={(e) => setForm({ ...form, postalCode: e.target.value })} />
               </div>
               <div>
                 <label className="text-sm font-medium">Plaats<span className="text-rose-600">*</span></label>
-                <input className={`mt-1 w-full rounded-xl border px-3 py-2 ${errors.city?"border-rose-400":''}`} placeholder="Paris" value={form.city} onChange={(e)=>setForm({...form, city:e.target.value})} />
+                <input className={`mt-1 w-full rounded-xl border px-3 py-2 ${errors.city ? "border-rose-400" : ""}`} placeholder="Paris" value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} />
                 {errors.city && <p className="text-xs text-rose-600">{errors.city}</p>}
               </div>
               <div>
                 <label className="text-sm font-medium">Land</label>
-                <input className="mt-1 w-full rounded-xl border px-3 py-2" value={form.country} onChange={(e)=>setForm({...form, country:e.target.value})} />
+                <input className="mt-1 w-full rounded-xl border px-3 py-2" value={form.country} onChange={(e) => setForm({ ...form, country: e.target.value })} />
               </div>
             </div>
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
                 <label className="text-sm font-medium">GPS Latitude (opt.)</label>
-                <input className="mt-1 w-full rounded-xl border px-3 py-2" placeholder="48.8566" value={form.lat} onChange={(e)=>setForm({...form, lat:e.target.value})} />
+                <input className="mt-1 w-full rounded-xl border px-3 py-2" placeholder="48.8566" value={form.lat} onChange={(e) => setForm({ ...form, lat: e.target.value })} />
               </div>
               <div>
                 <label className="text-sm font-medium">GPS Longitude (opt.)</label>
-                <input className="mt-1 w-full rounded-xl border px-3 py-2" placeholder="2.3522" value={form.lng} onChange={(e)=>setForm({...form, lng:e.target.value})} />
+                <input className="mt-1 w-full rounded-xl border px-3 py-2" placeholder="2.3522" value={form.lng} onChange={(e) => setForm({ ...form, lng: e.target.value })} />
               </div>
             </div>
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-4 md:col-span-2">
               <div className="sm:col-span-2">
                 <label className="text-sm font-medium">Makelaardij</label>
-                <input className="mt-1 w-full rounded-xl border px-3 py-2" placeholder="Agence BelleMaison" value={form.agencyName} onChange={(e)=>setForm({...form, agencyName:e.target.value})} />
+                <input className="mt-1 w-full rounded-xl border px-3 py-2" placeholder="Agence BelleMaison" value={form.agencyName} onChange={(e) => setForm({ ...form, agencyName: e.target.value })} />
               </div>
               <div>
                 <label className="text-sm font-medium">Makelaar naam</label>
-                <input className="mt-1 w-full rounded-xl border px-3 py-2" placeholder="Mme Dupont" value={form.agentName} onChange={(e)=>setForm({...form, agentName:e.target.value})} />
+                <input className="mt-1 w-full rounded-xl border px-3 py-2" placeholder="Mme Dupont" value={form.agentName} onChange={(e) => setForm({ ...form, agentName: e.target.value })} />
               </div>
               <div>
                 <label className="text-sm font-medium">Makelaar telefoon</label>
-                <input className="mt-1 w-full rounded-xl border px-3 py-2" placeholder="+33 ..." value={form.agentPhone} onChange={(e)=>setForm({...form, agentPhone:e.target.value})} />
+                <input className="mt-1 w-full rounded-xl border px-3 py-2" placeholder="+33 ..." value={form.agentPhone} onChange={(e) => setForm({ ...form, agentPhone: e.target.value })} />
               </div>
               <div className="sm:col-span-2">
                 <label className="text-sm font-medium">Makelaar e‑mail</label>
-                <input className="mt-1 w-full rounded-xl border px-3 py-2" placeholder="makelaar@bedrijf.fr" value={form.agentEmail} onChange={(e)=>setForm({...form, agentEmail:e.target.value})} />
+                <input className="mt-1 w-full rounded-xl border px-3 py-2" placeholder="makelaar@bedrijf.fr" value={form.agentEmail} onChange={(e) => setForm({ ...form, agentEmail: e.target.value })} />
               </div>
               <div className="sm:col-span-2">
                 <label className="text-sm font-medium">Geplande bezichtiging (datum/tijd)</label>
-                <input type="datetime-local" className="mt-1 w-full rounded-xl border px-3 py-2" value={form.viewingAt} onChange={(e)=>setForm({...form, viewingAt:e.target.value})} />
+                <input type="datetime-local" className="mt-1 w-full rounded-xl border px-3 py-2" value={form.viewingAt} onChange={(e) => setForm({ ...form, viewingAt: e.target.value })} />
                 <p className="mt-1 text-xs text-slate-500">Tip: dit gebruikt je lokale tijdzone.</p>
               </div>
             </div>
 
             <div>
               <label className="text-sm font-medium">Status<span className="text-rose-600">*</span></label>
-              <select className={`mt-1 w-full rounded-xl border px-3 py-2 ${errors.status?"border-rose-400":''}`} value={form.status} onChange={(e)=>setForm({...form, status:e.target.value})}>
+              <select className={`mt-1 w-full rounded-xl border px-3 py-2 ${errors.status ? "border-rose-400" : ""}`} value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
                 <option value="">— Kies status —</option>
-                {STATUS_OPTIONS.map((opt)=>(<option key={opt.value} value={opt.value}>{opt.label}</option>))}
+                {STATUS_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
               </select>
               {errors.status && <p className="text-xs text-rose-600">{errors.status}</p>}
             </div>
 
             <div>
               <label className="text-sm font-medium">Notities</label>
-              <textarea className="mt-1 w-full rounded-xl border px-3 py-2" rows={2} placeholder="Parkeren bij achteringang, sleutel ophalen bij buur..." value={form.notes} onChange={(e)=>setForm({...form, notes:e.target.value})} />
+              <textarea className="mt-1 w-full rounded-xl border px-3 py-2" rows={2} placeholder="Parkeren bij achteringang, sleutel ophalen bij buur..." value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
             </div>
 
             <div className="md:col-span-2 flex items-center gap-2 pt-2">
@@ -703,15 +760,15 @@ export default function App() {
         {/* Controls */}
         <section className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex gap-2">
-            <input className="w-64 rounded-xl border px-3 py-2" placeholder="Zoek op adres, plaats, makelaar..." value={filter} onChange={(e)=>setFilter(e.target.value)} />
-            <select className="rounded-xl border px-3 py-2" value={statusFilter} onChange={(e)=>setStatusFilter(e.target.value)}>
+            <input className="w-64 rounded-xl border px-3 py-2" placeholder="Zoek op adres, plaats, makelaar..." value={filter} onChange={(e) => setFilter(e.target.value)} />
+            <select className="rounded-xl border px-3 py-2" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
               <option value="">Alle statussen</option>
-              {STATUS_OPTIONS.map((o)=>(<option key={o.value} value={o.value}>{o.label}</option>))}
+              {STATUS_OPTIONS.map((o) => (<option key={o.value} value={o.value}>{o.label}</option>))}
             </select>
           </div>
           <div className="flex gap-2">
             <label className="text-sm">Sorteren:
-              <select className="ml-2 rounded-xl border px-3 py-2" value={sortBy} onChange={(e)=>setSortBy(e.target.value)}>
+              <select className="ml-2 rounded-xl border px-3 py-2" value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
                 <option value="createdDesc">Nieuwste eerst</option>
                 <option value="cityAsc">Plaats A→Z</option>
                 <option value="statusAsc">Status A→Z</option>
@@ -722,9 +779,7 @@ export default function App() {
 
         {/* List */}
         <section className="space-y-3">
-          {visible.length === 0 && (
-            <div className="rounded-2xl border bg-white p-6 text-center text-slate-600">Nog geen woningen opgeslagen.</div>
-          )}
+          {visible.length === 0 && (<div className="rounded-2xl border bg-white p-6 text-center text-slate-600">Nog geen woningen opgeslagen.</div>)}
           {visible.map((it, idx) => (
             <article key={it.id} className="rounded-2xl border bg-white p-4 shadow-sm">
               <div className="flex flex-col gap-3">
@@ -732,44 +787,23 @@ export default function App() {
                   <div className="grow">
                     <div className="flex flex-wrap items-center gap-2">
                       <h3 className="text-lg font-semibold">{it.title || "(Geen titel)"}</h3>
-                      <span className={badgeClass(it.status)}>{STATUS_OPTIONS.find(s=>s.value===it.status)?.label || it.status}</span>
-                      {averageRating(it.ratings) > 0 && (
-                        <span className="ml-2 rounded-full bg-yellow-50 px-2 py-0.5 text-xs font-medium text-amber-700">⭐ {averageRating(it.ratings)}/5</span>
-                      )}
+                      <span className={badgeClass(it.status)}>{STATUS_OPTIONS.find((s) => s.value === it.status)?.label || it.status}</span>
+                      {averageRating(it.ratings) > 0 && (<span className="ml-2 rounded-full bg-yellow-50 px-2 py-0.5 text-xs font-medium text-amber-700">⭐ {averageRating(it.ratings)}/5</span>)}
                     </div>
-                    <p className="text-sm text-slate-700">
-                      {it.address && <span>{it.address}, </span>}
-                      {[it.postalCode, it.city].filter(Boolean).join(" ")} 
-                      {it.country ? `, ${it.country}` : ""}
-                    </p>
-                    {(it.agencyName) && (
-                      <p className="text-xs text-slate-600">Makelaardij: {it.agencyName}</p>
-                    )}
-                    {(it.agentName || it.agentPhone || it.agentEmail) && (
-                      <p className="text-xs text-slate-600">Makelaar: {[it.agentName, it.agentPhone, it.agentEmail].filter(Boolean).join(" · ")}</p>
-                    )}
+                    <p className="text-sm text-slate-700">{it.address && <span>{it.address}, </span>}{[it.postalCode, it.city].filter(Boolean).join(" ")} {it.country ? `, ${it.country}` : ""}</p>
+                    {it.agencyName && <p className="text-xs text-slate-600">Makelaardij: {it.agencyName}</p>}
+                    {(it.agentName || it.agentPhone || it.agentEmail) && (<p className="text-xs text-slate-600">Makelaar: {[it.agentName, it.agentPhone, it.agentEmail].filter(Boolean).join(" · ")}</p>)}
 
                     {/* Inline bewerken: status + viewingAt */}
                     <div className="mt-2 flex flex-wrap items-center gap-2">
                       <label className="text-xs text-slate-600">Status</label>
-                      <select
-                        className="rounded-lg border px-2 py-1 text-xs"
-                        value={it.status}
-                        onChange={(e)=>updateItem(it.id,{ status: e.target.value })}
-                      >
-                        {STATUS_OPTIONS.map((o)=>(<option key={o.value} value={o.value}>{o.label}</option>))}
+                      <select className="rounded-lg border px-2 py-1 text-xs" value={it.status} onChange={(e) => updateItem(it.id, { status: e.target.value })}>
+                        {STATUS_OPTIONS.map((o) => (<option key={o.value} value={o.value}>{o.label}</option>))}
                       </select>
 
                       <label className="ml-2 text-xs text-slate-600">Bezichtiging</label>
-                      <input
-                        type="datetime-local"
-                        className="rounded-lg border px-2 py-1 text-xs"
-                        value={it.viewingAt || ""}
-                        onChange={(e)=>updateItem(it.id,{ viewingAt: e.target.value })}
-                      />
-                      {it.viewingAt && (
-                        <span className="text-xs text-slate-600">({formatViewing(it.viewingAt)})</span>
-                      )}
+                      <input type="datetime-local" className="rounded-lg border px-2 py-1 text-xs" value={it.viewingAt || ""} onChange={(e) => updateItem(it.id, { viewingAt: e.target.value })} />
+                      {it.viewingAt && <span className="text-xs text-slate-600">({formatViewing(it.viewingAt)})</span>}
                     </div>
 
                     {/* Beoordeling */}
@@ -779,19 +813,17 @@ export default function App() {
                         <span className="text-xs text-slate-600">Gemiddelde: {averageRating(it.ratings) || "–"}/5</span>
                       </div>
                       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                        <StarRating value={it.ratings?.overall || 0} onChange={(v)=>updateRating(it.id,'overall',v)} label="Algehele indruk" />
-                        <StarRating value={it.ratings?.location || 0} onChange={(v)=>updateRating(it.id,'location',v)} label="Locatie / Ligging" />
-                        <StarRating value={it.ratings?.accessibility || 0} onChange={(v)=>updateRating(it.id,'accessibility',v)} label="Bereikbaarheid" />
-                        <StarRating value={it.ratings?.business || 0} onChange={(v)=>updateRating(it.id,'business',v)} label="Bedrijfspotentieel" />
-                        <StarRating value={it.ratings?.renovation || 0} onChange={(v)=>updateRating(it.id,'renovation',v)} label="Benodigd verbouwingsbudget" hint="5 = weinig budget nodig" />
-                        <StarRating value={it.ratings?.parking || 0} onChange={(v)=>updateRating(it.id,'parking',v)} label="Parkeergelegenheid" />
-                        <StarRating value={it.ratings?.pool || 0} onChange={(v)=>updateRating(it.id,'pool',v)} label="Zwembad" />
-                        <StarRating value={it.ratings?.privateAreas || 0} onChange={(v)=>updateRating(it.id,'privateAreas',v)} label="Privévertrekken" />
-                        <StarRating value={it.ratings?.feasibility || 0} onChange={(v)=>updateRating(it.id,'feasibility',v)} label="Realiseerbaarheid" />
+                        <StarRating value={it.ratings?.overall || 0} onChange={(v) => updateRating(it.id, "overall", v)} label="Algehele indruk" />
+                        <StarRating value={it.ratings?.location || 0} onChange={(v) => updateRating(it.id, "location", v)} label="Locatie / Ligging" />
+                        <StarRating value={it.ratings?.accessibility || 0} onChange={(v) => updateRating(it.id, "accessibility", v)} label="Bereikbaarheid" />
+                        <StarRating value={it.ratings?.business || 0} onChange={(v) => updateRating(it.id, "business", v)} label="Bedrijfspotentieel" />
+                        <StarRating value={it.ratings?.renovation || 0} onChange={(v) => updateRating(it.id, "renovation", v)} label="Benodigd verbouwingsbudget" hint="5 = weinig budget nodig" />
+                        <StarRating value={it.ratings?.parking || 0} onChange={(v) => updateRating(it.id, "parking", v)} label="Parkeergelegenheid" />
+                        <StarRating value={it.ratings?.pool || 0} onChange={(v) => updateRating(it.id, "pool", v)} label="Zwembad" />
+                        <StarRating value={it.ratings?.privateAreas || 0} onChange={(v) => updateRating(it.id, "privateAreas", v)} label="Privévertrekken" />
+                        <StarRating value={it.ratings?.feasibility || 0} onChange={(v) => updateRating(it.id, "feasibility", v)} label="Realiseerbaarheid" />
                       </div>
-                      {it.status !== 'bezichtigd' && (
-                        <p className="mt-2 text-xs text-slate-500">Tip: markeer de status als <em>Bezichtigd</em> zodra je de beoordeling definitief maakt.</p>
-                      )}
+                      {it.status !== "bezichtigd" && (<p className="mt-2 text-xs text-slate-500">Tip: markeer de status als <em>Bezichtigd</em> zodra je de beoordeling definitief maakt.</p>)}
                     </div>
 
                     {it.notes && <p className="mt-2 text-sm text-slate-600">🗒️ {it.notes}</p>}
@@ -800,16 +832,14 @@ export default function App() {
                   <div className="flex flex-wrap items-start gap-2">
                     <a href={buildGoogleMapsUrl(it)} target="_blank" rel="noopener noreferrer" className="rounded-xl border px-3 py-2 text-sm shadow-sm hover:bg-slate-50">Google Maps</a>
                     <a href={buildOsmUrl(it)} target="_blank" rel="noopener noreferrer" className="rounded-xl border px-3 py-2 text-sm shadow-sm hover:bg-slate-50">OpenStreetMap</a>
-                    <button onClick={()=>startEdit(it)} className="rounded-xl border px-3 py-2 text-sm shadow-sm hover:bg-slate-50">Bewerken</button>
-                    <button onClick={()=>remove(it.id)} className="rounded-xl border px-3 py-2 text-sm shadow-sm hover:bg-rose-50">Verwijderen</button>
-                    <button onClick={()=>move(it.id,"up")} disabled={idx===0} className="rounded-xl border px-3 py-2 text-sm shadow-sm disabled:opacity-40">↑</button>
-                    <button onClick={()=>move(it.id,"down")} disabled={idx===visible.length-1} className="rounded-xl border px-3 py-2 text-sm shadow-sm disabled:opacity-40">↓</button>
+                    <button onClick={() => startEdit(it)} className="rounded-xl border px-3 py-2 text-sm shadow-sm hover:bg-slate-50">Bewerken</button>
+                    <button onClick={() => remove(it.id)} className="rounded-xl border px-3 py-2 text-sm shadow-sm hover:bg-rose-50">Verwijderen</button>
+                    <button onClick={() => move(it.id, "up")} disabled={idx === 0} className="rounded-xl border px-3 py-2 text-sm shadow-sm disabled:opacity-40">↑</button>
+                    <button onClick={() => move(it.id, "down")} disabled={idx === visible.length - 1} className="rounded-xl border px-3 py-2 text-sm shadow-sm disabled:opacity-40">↓</button>
                   </div>
                 </div>
 
-                {it.url && (
-                  <LinkPreview url={it.url} />
-                )}
+                {it.url && <LinkPreview url={it.url} />}
               </div>
             </article>
           ))}
