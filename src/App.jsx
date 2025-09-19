@@ -28,12 +28,12 @@ import {
 
 // 🔧 Vervang met jouw Firebase config of via Vite env vars (Vercel)
 const firebaseConfig = {
-  apiKey: import.meta?.env?.VITE_FIREBASE_API_KEY || "YOUR_API_KEY",
-  authDomain: import.meta?.env?.VITE_FIREBASE_AUTH_DOMAIN || "YOUR_PROJECT.firebaseapp.com",
-  projectId: import.meta?.env?.VITE_FIREBASE_PROJECT_ID || "YOUR_PROJECT_ID",
-  storageBucket: import.meta?.env?.VITE_FIREBASE_STORAGE_BUCKET || "YOUR_PROJECT.appspot.com",
-  messagingSenderId: import.meta?.env?.VITE_FIREBASE_MESSAGING_SENDER_ID || "YOUR_SENDER_ID",
-  appId: import.meta?.env?.VITE_FIREBASE_APP_ID || "YOUR_APP_ID",
+  apiKey: import.meta?.env?.VITE_FIREBASE_API_KEY || "AIzaSyAixsEtpf-ZxVEXENyDFdljLVj5jH5Wloo",
+  authDomain: import.meta?.env?.VITE_FIREBASE_AUTH_DOMAIN || "huizenjacht-550d8.firebaseapp.com",
+  projectId: import.meta?.env?.VITE_FIREBASE_PROJECT_ID || "huizenjacht-550d8",
+  storageBucket: import.meta?.env?.VITE_FIREBASE_STORAGE_BUCKET || "huizenjacht-550d8.firebasestorage.app",
+  messagingSenderId: import.meta?.env?.VITE_FIREBASE_MESSAGING_SENDER_ID || "460752433385",
+  appId: import.meta?.env?.VITE_FIREBASE_APP_ID || "1:460752433385:web:6aec831191354c0c608078",
 };
 
 function isFirebaseConfigured(cfg) {
@@ -132,7 +132,6 @@ function emptyForm() {
     id: uuid(),
     title: "",
     url: "",
-    price: "",
     address: "",
     city: "",
     postalCode: "",
@@ -190,15 +189,6 @@ function getUrlParts(u) {
 function hostInitial(host) {
   const h = (host || "?").trim();
   return (h[0] || "?").toUpperCase();
-}
-
-function formatEuro(value) {
-  if (value === null || value === undefined || value === "") return "";
-  try {
-    return new Intl.NumberFormat('nl-NL', { style: 'currency', currency: 'EUR', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(Number(value));
-  } catch {
-    return "€ " + Number(value).toLocaleString('nl-NL');
-  }
 }
 
 function LinkPreview({ url }) {
@@ -286,8 +276,6 @@ export default function App() {
   const [filter, setFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [sortBy, setSortBy] = useState("createdDesc");
-  const [priceMin, setPriceMin] = useState("");
-  const [priceMax, setPriceMax] = useState("");
   const [errors, setErrors] = useState({});
 
   const [user, setUser] = useState(null);
@@ -360,8 +348,7 @@ export default function App() {
     if (Object.keys(errs).length) return;
 
     const { id: _drop, ...formNoId } = form; // id niet meesturen
-    const priceNum = form.price === "" ? null : Number(form.price);
-    const withMeta = { ...formNoId, price: priceNum, createdAt: Date.now(), order: Date.now() };
+    const withMeta = { ...formNoId, createdAt: Date.now(), order: Date.now() };
 
     if (!boardId) {
       setItems((prev) => [withMeta, ...prev]);
@@ -393,8 +380,7 @@ export default function App() {
       return;
     }
     try {
-      const { id: _idDrop, ...payloadRaw } = form; // id niet in payload
-      const payload = { ...payloadRaw, price: payloadRaw.price === "" ? null : Number(payloadRaw.price) };
+      const { id: _idDrop, ...payload } = form; // id niet in payload
       await updateDoc(doc(db, "boards", boardId, "items", editingId), payload);
       setEditingId(null);
       resetForm();
@@ -562,15 +548,8 @@ export default function App() {
     if (sortBy === "createdDesc") v.sort((a, b) => (b.order || 0) - (a.order || 0));
     if (sortBy === "cityAsc") v.sort((a, b) => (a.city || "").localeCompare(b.city || ""));
     if (sortBy === "statusAsc") v.sort((a, b) => (a.status || "").localeCompare(b.status || ""));
-    if (sortBy === "priceAsc") v.sort((a, b) => ((a.price ?? Infinity) - (b.price ?? Infinity)));
-    if (sortBy === "priceDesc") v.sort((a, b) => ((b.price ?? -Infinity) - (a.price ?? -Infinity)));
-
-    const min = priceMin !== "" ? Number(priceMin) : null;
-    const max = priceMax !== "" ? Number(priceMax) : null;
-    if (min !== null) v = v.filter((it) => typeof it.price === "number" ? it.price >= min : false);
-    if (max !== null) v = v.filter((it) => typeof it.price === "number" ? it.price <= max : false);
     return v;
-  }, [items, filter, statusFilter, sortBy, priceMin, priceMax]);
+  }, [items, filter, statusFilter, sortBy]);
 
   const isEditing = Boolean(editingId);
 
@@ -655,12 +634,6 @@ export default function App() {
               <label className="text-sm font-medium">Link naar woning<span className="text-rose-600">*</span></label>
               <input className={`mt-1 w-full rounded-xl border px-3 py-2 ${errors.url ? "border-rose-400" : ""}`} placeholder="https://..." value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} />
               {errors.url && <p className="text-xs text-rose-600">{errors.url}</p>}
-            </div>
-
-            <div>
-              <label className="text-sm font-medium">Prijs (EUR)</label>
-              <input type="number" min="0" step="1000" className="mt-1 w-full rounded-xl border px-3 py-2" placeholder="bijv. 350000" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} />
-              <p className="mt-1 text-xs text-slate-500">Alleen cijfers, bijvoorbeeld 350000.</p>
             </div>
 
             <div className="md:col-span-2 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -748,23 +721,19 @@ export default function App() {
 
         {/* Filters/Sortering */}
         <section className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex flex-wrap gap-2">
+          <div className="flex gap-2">
             <input className="w-64 rounded-xl border px-3 py-2" placeholder="Zoek op adres, plaats, makelaar..." value={filter} onChange={(e) => setFilter(e.target.value)} />
-            <input type="number" min="0" step="10000" className="w-36 rounded-xl border px-3 py-2" placeholder="Min €" value={priceMin} onChange={(e)=>setPriceMin(e.target.value)} />
-            <input type="number" min="0" step="10000" className="w-36 rounded-xl border px-3 py-2" placeholder="Max €" value={priceMax} onChange={(e)=>setPriceMax(e.target.value)} />
             <select className="rounded-xl border px-3 py-2" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
               <option value="">Alle statussen</option>
               {STATUS_OPTIONS.map((o) => (<option key={o.value} value={o.value}>{o.label}</option>))}
             </select>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex gap-2">
             <label className="text-sm">Sorteren:
               <select className="ml-2 rounded-xl border px-3 py-2" value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
                 <option value="createdDesc">Nieuwste eerst</option>
                 <option value="cityAsc">Plaats A→Z</option>
                 <option value="statusAsc">Status A→Z</option>
-                <option value="priceAsc">Prijs ↑</option>
-                <option value="priceDesc">Prijs ↓</option>
               </select>
             </label>
           </div>
@@ -786,9 +755,6 @@ export default function App() {
                       )}
                     </div>
                     <p className="text-sm text-slate-700">{it.address && <span>{it.address}, </span>}{[it.postalCode, it.city].filter(Boolean).join(" ")} {it.country ? `, ${it.country}` : ""}</p>
-                    {(it.price ?? null) !== null && (
-                      <p className="text-sm text-slate-700">💶 Prijs: {formatEuro(it.price)}</p>
-                    )}
                     {it.agencyName && <p className="text-xs text-slate-600">Makelaardij: {it.agencyName}</p>}
                     {(it.agentName || it.agentPhone || it.agentEmail) && (
                       <p className="text-xs text-slate-600">Makelaar: {[it.agentName, it.agentPhone, it.agentEmail].filter(Boolean).join(" · ")}</p>
