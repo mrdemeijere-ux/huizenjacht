@@ -1,28 +1,74 @@
 import React, { useEffect, useMemo, useState } from "react";
 
-// Huizenjacht – single-file MVP (React + Tailwind)
-// Fixes in this version:
-// - Fixed syntax errors (extra closing braces) in emptyForm and updateRating
-// - Removed duplicated JSX fragment in the list
-// - Hardened localStorage access for SSR safety
-// - Added inline dev tests for core helpers (validation & averages)
-// Features:
-// - Properties: title, link, address or GPS (lat/lng), agency & agent, status, notes, viewing datetime
-// - URL preview (no external network calls)
-// - Inline status change + inline viewing datetime
-// - Per-criterion ratings (1–5 stars) + average
-// - Persist to localStorage; filter/sort; move up/down; edit/delete
+// Huizenjacht – single-file MVP (React + Tailwind + Firestore realtime sync)
+// New in this version:
+// - Firebase Auth (anonymous) + Firestore realtime sync per "Board"
+// - Create/Join board, copy invite link, live multi-device updates
+// - Offline support via Firestore IndexedDB persistence
+// - Backward compatible: if no board selected, localStorage works as before
+//
+// How to enable Firebase:
+// 1) Create a Firebase project, enable Authentication (Anonymous) and Firestore.
+// 2) Add your web app and paste config below.
+// 3) In Firebase Auth → Settings → Authorized domains: add your Vercel domain.
+// 4) Suggested Firestore rules (minimal):
+//    rules_version = '2';
+//    service cloud.firestore { match /databases/{database}/documents { 
+//      match /boards/{boardId} {
+//        allow read, write: if request.auth != null; // anonymous users okay
+//        match /items/{itemId} { allow read, write: if request.auth != null; }
+//      }
+//    }}
 
+// ===================== Firebase setup =====================
+import { initializeApp } from "firebase/app";
+import {
+  getFirestore,
+  collection,
+  doc,
+  addDoc,
+  setDoc,
+  updateDoc,
+  deleteDoc,
+  onSnapshot,
+  orderBy,
+  query,
+  serverTimestamp,
+  writeBatch,
+  enableIndexedDbPersistence,
+} from "firebase/firestore";
+import { getAuth, onAuthStateChanged, signInAnonymously } from "firebase/auth";
+
+// 🔧 REPLACE with your own Firebase config
+const firebaseConfig = {
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT.firebaseapp.com",
+  projectId: "YOUR_PROJECT_ID",
+  storageBucket: "YOUR_PROJECT.appspot.com",
+  messagingSenderId: "YOUR_SENDER_ID",
+  appId: "YOUR_APP_ID",
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const auth = getAuth(app);
+
+// Enable offline persistence
+enableIndexedDbPersistence(db).catch((e) => {
+  console.warn("IndexedDB persistence not enabled:", e?.code || e);
+});
+
+// ===================== App state & helpers =====================
 const STORAGE_KEY = "huizenjacht_v1";
+const BOARD_KEY = "huizenjacht_board_id";
 
-// Safe UUID helper (fixes blank screen on browsers without crypto.randomUUID, e.g. older Safari)
+// Safe UUID helper for older browsers
 function uuid() {
   try {
     if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
       return crypto.randomUUID();
     }
   } catch {}
-  // Fallback: not RFC compliant, but good enough for local IDs
   return `id-${Math.random().toString(36).slice(2)}-${Date.now().toString(36)}`;
 }
 
@@ -76,15 +122,15 @@ function badgeClass(status) {
 
 function defaultRatings() {
   return {
-    overall: 0, // Algehele indruk
-    location: 0, // Locatie/Ligging
-    accessibility: 0, // Bereikbaarheid
-    business: 0, // Bedrijfspotentieel
-    renovation: 0, // Benodigd verbouwingsbudget
-    parking: 0, // Parkeergelegenheid
-    pool: 0, // Zwembad
-    privateAreas: 0, // Privévertrekken
-    feasibility: 0, // Realiseerbaarheid
+    overall: 0,
+    location: 0,
+    accessibility: 0,
+    business: 0,
+    renovation: 0,
+    parking: 0,
+    pool: 0,
+    privateAreas: 0,
+    feasibility: 0,
   };
 }
 
@@ -99,12 +145,12 @@ function emptyForm() {
     country: "France",
     lat: "",
     lng: "",
-    agencyName: "", // Makelaardij
+    agencyName: "",
     agentName: "",
     agentPhone: "",
     agentEmail: "",
     status: "",
-    viewingAt: "", // geplande bezichtiging (datetime-local ISO zonder Z)
+    viewingAt: "",
     notes: "",
     ratings: defaultRatings(),
   };
@@ -139,11 +185,9 @@ function validate(item) {
   const errors = {};
   if (!item.title?.trim()) errors.title = "Titel is verplicht";
   if (!item.url?.trim()) errors.url = "Link is verplicht";
-  if (!item.address?.trim() && !(item.lat && item.lng))
-    errors.address = "Adres of GPS is verplicht";
+  if (!item.address?.trim() && !(item.lat && item.lng)) errors.address = "Adres of GPS is verplicht";
   if (!item.city?.trim() && !(item.lat && item.lng)) errors.city = "Plaats is verplicht";
   if (!item.status) errors.status = "Status is verplicht";
-  // viewingAt en ratings zijn optioneel
   return errors;
 }
 
@@ -168,16 +212,11 @@ function LinkPreview({ url }) {
   if (!url) return null;
   const parts = getUrlParts(url);
   const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(url);
-    } catch {
-      /* noop */
-    }
+    try { await navigator.clipboard.writeText(url); } catch {}
   };
   return (
     <div className="flex items-center justify-between gap-3 rounded-xl border bg-slate-50 px-3 py-2">
       <div className="flex min-w-0 items-center gap-3">
-        {/* Local, no-network avatar based on host initial */}
         <div className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-300 text-[10px] font-bold text-slate-800">
           {hostInitial(parts.host)}
         </div>
@@ -227,8 +266,28 @@ function averageRating(ratings) {
   return Math.round((vals.reduce((a, b) => a + Number(b), 0) / vals.length) * 10) / 10;
 }
 
+function TopStatusBar({ boardId, liveStatus }) {
+  return (
+    <div className="sticky top-0 z-50 w-full border-b bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/60">
+      <div className="mx-auto max-w-6xl px-6 py-2 text-xs text-slate-700 flex items-center justify-between">
+        <div>
+          {boardId ? (
+            <>
+              ⚡ Sync: <span className="font-medium">{liveStatus}</span> · Board: <code className="px-1 rounded bg-slate-100">{boardId}</code>
+            </>
+          ) : (
+            <>
+              ⚠️ Je werkt lokaal — <span className="font-medium">geen sync</span>. Maak of join een board om te delen.
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
-  const [items, setItems] = useLocalStorageState([]);
+  const [items, setItems] = useLocalStorageState([]); // used when no board selected
   const [form, setForm] = useState(emptyForm());
   const [editingId, setEditingId] = useState(null);
   const [filter, setFilter] = useState("");
@@ -236,24 +295,45 @@ export default function App() {
   const [sortBy, setSortBy] = useState("createdDesc");
   const [errors, setErrors] = useState({});
 
-  // Inline dev tests (run once per load)
+  // Firebase auth
+  const [user, setUser] = useState(null);
+  const [boardId, setBoardId] = useState(() => {
+    const urlBoard = new URLSearchParams(window.location.search).get("board");
+    return urlBoard || localStorage.getItem(BOARD_KEY) || "";
+  });
+  const [liveStatus, setLiveStatus] = useState("offline");
+
   useEffect(() => {
-    if (typeof window !== "undefined" && !window.__HZJ_TESTED__) {
-      try {
-        const f = emptyForm();
-        const e = validate(f);
-        console.assert(e.title && e.url && e.status && (e.address || e.city), "validate() should require core fields");
-        console.assert(averageRating(defaultRatings()) === 0, "averageRating default should be 0");
-        console.assert(averageRating({ overall: 5, location: 3 }) === 4, "averageRating 5 & 3 should be 4");
-      } catch (err) {
-        console.warn("Dev tests failed:", err);
-      }
-      window.__HZJ_TESTED__ = true;
-    }
+    const unsub = onAuthStateChanged(auth, (u) => {
+      setUser(u || null);
+      if (!u) signInAnonymously(auth).catch((e) => console.error("anon auth failed", e));
+    });
+    return () => unsub();
   }, []);
 
-  // Ensure legacy items have id
+  // Subscribe to Firestore when a board is selected
   useEffect(() => {
+    if (!boardId || !user) return;
+    localStorage.setItem(BOARD_KEY, boardId);
+
+    // Ensure board doc exists
+    setDoc(doc(db, "boards", boardId), { createdAt: serverTimestamp() }, { merge: true }).catch(()=>{});
+
+    const qRef = query(collection(db, "boards", boardId, "items"), orderBy("order", "desc"), orderBy("createdAt", "desc"));
+    const unsub = onSnapshot(qRef, (snap) => {
+      const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      setItems(list);
+      setLiveStatus("online");
+    }, (err) => {
+      console.error("onSnapshot error", err);
+      setLiveStatus("error");
+    });
+    return () => { setLiveStatus("offline"); unsub(); };
+  }, [boardId, user]);
+
+  // Ensure legacy items have id (local mode only)
+  useEffect(() => {
+    if (boardId) return; // skip when using Firestore
     const fixed = items.map((it) => (it.id ? it : { ...it, id: uuid() }));
     if (JSON.stringify(fixed) !== JSON.stringify(items)) setItems(fixed);
   }, []);
@@ -263,15 +343,27 @@ export default function App() {
     setErrors({});
   }
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
     const errs = validate(form);
     setErrors(errs);
     if (Object.keys(errs).length) return;
 
-    const withMeta = { ...form, createdAt: Date.now() };
-    setItems((prev) => [withMeta, ...prev]);
-    resetForm();
+    const withMeta = { ...form, createdAt: Date.now(), order: Date.now() };
+    if (!boardId) {
+      setItems((prev) => [withMeta, ...prev]);
+      resetForm();
+      return;
+    }
+    try {
+      await addDoc(collection(db, "boards", boardId, "items"), {
+        ...withMeta,
+        createdAt: serverTimestamp(),
+      });
+      resetForm();
+    } catch (err) {
+      alert("Opslaan in Firestore mislukt: " + (err?.message || String(err)));
+    }
   }
 
   function startEdit(it) {
@@ -279,13 +371,24 @@ export default function App() {
     setForm({ ...it });
   }
 
-  function saveEdit() {
+  async function saveEdit() {
     const errs = validate(form);
     setErrors(errs);
     if (Object.keys(errs).length) return;
-    setItems((prev) => prev.map((p) => (p.id === editingId ? { ...p, ...form } : p)));
-    setEditingId(null);
-    resetForm();
+
+    if (!boardId) {
+      setItems((prev) => prev.map((p) => (p.id === editingId ? { ...p, ...form } : p)));
+      setEditingId(null);
+      resetForm();
+      return;
+    }
+    try {
+      await updateDoc(doc(db, "boards", boardId, "items", editingId), { ...form });
+      setEditingId(null);
+      resetForm();
+    } catch (err) {
+      alert("Bijwerken mislukt: " + (err?.message || String(err)));
+    }
   }
 
   function cancelEdit() {
@@ -293,33 +396,61 @@ export default function App() {
     resetForm();
   }
 
-  function remove(id) {
-    setItems((prev) => prev.filter((p) => p.id !== id));
-    if (editingId === id) cancelEdit();
+  async function remove(id) {
+    if (!confirm("Weet je zeker dat je deze woning wilt verwijderen?")) return;
+    if (!boardId) {
+      setItems((prev) => prev.filter((p) => p.id !== id));
+      if (editingId === id) cancelEdit();
+      return;
+    }
+    try {
+      await deleteDoc(doc(db, "boards", boardId, "items", id));
+    } catch (err) {
+      alert("Verwijderen mislukt: " + (err?.message || String(err)));
+    }
   }
 
-  function move(id, dir) {
-    setItems((prev) => {
-      const idx = prev.findIndex((p) => p.id === id);
-      if (idx < 0) return prev;
-      const next = [...prev];
-      const swapWith = dir === "up" ? idx - 1 : idx + 1;
-      if (swapWith < 0 || swapWith >= prev.length) return prev;
+  async function move(id, dir) {
+    const idx = items.findIndex((p) => p.id === id);
+    if (idx < 0) return;
+    const swapWith = dir === "up" ? idx - 1 : idx + 1;
+    if (swapWith < 0 || swapWith >= items.length) return;
+
+    if (!boardId) {
+      const next = [...items];
       [next[idx], next[swapWith]] = [next[swapWith], next[idx]];
-      return next;
-    });
+      setItems(next);
+      return;
+    }
+    try {
+      const a = items[idx];
+      const b = items[swapWith];
+      await Promise.all([
+        updateDoc(doc(db, "boards", boardId, "items", a.id), { order: b.order || 0 }),
+        updateDoc(doc(db, "boards", boardId, "items", b.id), { order: a.order || 0 }),
+      ]);
+    } catch (err) {
+      alert("Volgorde wijzigen mislukt: " + (err?.message || String(err)));
+    }
   }
 
-  function updateItem(id, patch) {
-    setItems((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch } : p)));
+  async function updateItem(id, patch) {
+    if (!boardId) {
+      setItems((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch } : p)));
+      return;
+    }
+    try {
+      await updateDoc(doc(db, "boards", boardId, "items", id), patch);
+    } catch (err) {
+      alert("Opslaan mislukt: " + (err?.message || String(err)));
+    }
   }
 
-  function updateRating(id, key, val) {
-    setItems((prev) => prev.map((p) => {
-      if (p.id !== id) return p;
-      const current = p.ratings || defaultRatings();
-      return { ...p, ratings: { ...current, [key]: val } };
-    }));
+  async function updateRating(id, key, val) {
+    const it = items.find((x) => x.id === id);
+    const current = it?.ratings || defaultRatings();
+    const patch = { ratings: { ...current, [key]: val } };
+    await updateItem(id, patch);
   }
 
   function exportJson() {
@@ -334,12 +465,22 @@ export default function App() {
 
   function importJson(file) {
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       try {
         const data = JSON.parse(String(e.target?.result || "[]"));
         if (!Array.isArray(data)) throw new Error("Bestand bevat geen lijst");
-        const normalized = data.map((d) => ({ id: d.id || uuid(), ...d }));
-        setItems(normalized);
+        if (!boardId) {
+          const normalized = data.map((d) => ({ id: d.id || uuid(), ...d }));
+          setItems(normalized);
+          return;
+        }
+        const batch = writeBatch(db);
+        const colRef = collection(db, "boards", boardId, "items");
+        data.forEach((d) => {
+          const ref = doc(colRef);
+          batch.set(ref, { ...d, createdAt: serverTimestamp(), order: d.order || Date.now() });
+        });
+        await batch.commit();
       } catch (err) {
         alert("Import mislukt: " + (err?.message || String(err)));
       }
@@ -347,23 +488,51 @@ export default function App() {
     reader.readAsText(file);
   }
 
+  function copyBoardLink() {
+    if (!boardId) return alert("Geen board actief. Maak of join eerst een board.");
+    const url = `${window.location.origin}${window.location.pathname}?board=${encodeURIComponent(boardId)}`;
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(url).then(() => alert("Board-link gekopieerd"));
+    } else {
+      prompt("Kopieer deze link:", url);
+    }
+  }
+
+  async function createBoard() {
+    const newId = uuid().replace(/[^a-zA-Z0-9_-]/g, "");
+    try {
+      await setDoc(doc(db, "boards", newId), { createdAt: serverTimestamp() });
+      setBoardId(newId);
+      localStorage.setItem(BOARD_KEY, newId);
+      // Migrate local items (if any)
+      if (items && items.length) {
+        const batch = writeBatch(db);
+        const colRef = collection(db, "boards", newId, "items");
+        items.forEach((d) => {
+          const ref = doc(colRef);
+          batch.set(ref, { ...d, createdAt: serverTimestamp(), order: d.order || Date.now() });
+        });
+        await batch.commit();
+      }
+      alert("Board aangemaakt en (eventueel) lokale items gemigreerd.");
+    } catch (e) {
+      alert("Board maken faalde: " + (e?.message || String(e)));
+    }
+  }
+
+  function joinBoardPrompt() {
+    const id = prompt("Voer Board ID in (van gedeelde link)", "");
+    if (!id) return;
+    setBoardId(id.trim());
+    localStorage.setItem(BOARD_KEY, id.trim());
+  }
+
   const visible = useMemo(() => {
     let v = [...items];
     if (filter.trim()) {
       const q = filter.toLowerCase();
       v = v.filter((it) =>
-        [
-          it.title,
-          it.address,
-          it.city,
-          it.postalCode,
-          it.country,
-          it.agencyName,
-          it.agentName,
-          it.agentEmail,
-          it.agentPhone,
-          it.notes,
-        ]
+        [it.title, it.address, it.city, it.postalCode, it.country, it.agencyName, it.agentName, it.agentEmail, it.agentPhone, it.notes]
           .filter(Boolean)
           .join(" ")
           .toLowerCase()
@@ -371,7 +540,7 @@ export default function App() {
       );
     }
     if (statusFilter) v = v.filter((it) => it.status === statusFilter);
-    if (sortBy === "createdDesc") v.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    if (sortBy === "createdDesc") v.sort((a, b) => (b.order || 0) - (a.order || 0));
     if (sortBy === "cityAsc") v.sort((a, b) => (a.city || "").localeCompare(b.city || ""));
     if (sortBy === "statusAsc") v.sort((a, b) => (a.status || "").localeCompare(b.status || ""));
     return v;
@@ -381,37 +550,55 @@ export default function App() {
 
   function formatViewing(dt) {
     if (!dt) return "";
-    try {
-      // datetime-local value is like "2025-09-18T14:30"
-      const asDate = new Date(dt);
-      if (!isNaN(asDate)) return asDate.toLocaleString();
-      return dt;
-    } catch {
-      return dt;
-    }
+    try { const asDate = new Date(dt); if (!isNaN(asDate)) return asDate.toLocaleString(); return dt; } catch { return dt; }
   }
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white text-slate-900">
+      <TopStatusBar boardId={boardId} liveStatus={liveStatus} />
       <div className="mx-auto max-w-6xl p-6">
         <header className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <h1 className="text-2xl font-bold">Huizenjacht – MVP</h1>
-            <p className="text-sm text-slate-600">
-              Beheer je bezichtigingen, makelaars en routes. Alles blijft lokaal opgeslagen
-              (localStorage).
-            </p>
+            <p className="text-sm text-slate-600">Beheer je bezichtigingen, makelaars en routes. Nu met realtime sync per board.</p>
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-600">
+              <span>Sync status: {liveStatus}</span>
+              {boardId && <span className="rounded-full bg-slate-100 px-2 py-0.5">Board: {boardId}</span>}
+            </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <label className="inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm shadow-sm">
               <span>Importeer JSON</span>
               <input type="file" accept="application/json" className="hidden" onChange={(e) => e.target.files?.[0] && importJson(e.target.files[0])} />
             </label>
-            <button onClick={exportJson} className="rounded-xl border px-3 py-2 text-sm shadow-sm hover:bg-slate-50">
-              Exporteer JSON
-            </button>
+            <button onClick={exportJson} className="rounded-xl border px-3 py-2 text-sm shadow-sm hover:bg-slate-50">Exporteer JSON</button>
+            <button onClick={copyBoardLink} className="rounded-xl border px-3 py-2 text-sm shadow-sm hover:bg-slate-50">Kopieer board-link</button>
           </div>
         </header>
+
+        {/* Board controls */}
+        <section className="mb-4 flex flex-wrap items-center gap-2">
+          {!boardId && (
+            <>
+              <button onClick={createBoard} className="rounded-2xl bg-slate-900 px-4 py-2 text-white shadow hover:opacity-90">Nieuw board</button>
+              <button onClick={joinBoardPrompt} className="rounded-2xl border px-4 py-2 shadow-sm">Board joinen</button>
+              <span className="text-sm text-slate-600">(zonder board werk je lokaal op dit apparaat)</span>
+            </>
+          )}
+          {boardId && (
+            <>
+              <button onClick={()=>{localStorage.removeItem(BOARD_KEY); setBoardId("");}} className="rounded-2xl border px-4 py-2 shadow-sm">Board verlaten</button>
+              <button onClick={copyBoardLink} className="rounded-2xl border px-4 py-2 shadow-sm">Deel invite-link</button>
+            </>
+          )}
+        </section>
+
+        {!boardId && (
+          <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+            <div className="font-medium">Je werkt nu lokaal (alleen dit apparaat).</div>
+            <div>Gebruik <span className="font-semibold">Nieuw board</span> of <span className="font-semibold">Board joinen</span> om te synchroniseren met andere apparaten.</div>
+          </div>
+        )}
 
         {/* Form */}
         <section className="mb-8 rounded-2xl border bg-white p-4 shadow-sm">
@@ -628,8 +815,9 @@ export default function App() {
           ))}
         </section>
 
-        <footer className="mt-10 text-center text-xs text-slate-500">
-          Gemaakt als MVP. Tip: voeg lat/lng toe voor preciezere routes. Alles wordt lokaal opgeslagen en blijft op dit apparaat.
+        <footer className="mt-10 space-y-1 text-center text-xs text-slate-500">
+          <p>Realtime via Firestore. Zonder board werk je lokaal (alleen dit apparaat).</p>
+          <p>Vergeet niet je Firebase config te vullen en je Vercel-domain toe te voegen bij Authorized domains. · Build: Firestore Sync v1</p>
         </footer>
       </div>
     </div>
