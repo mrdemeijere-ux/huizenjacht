@@ -3,8 +3,8 @@ import React, { useEffect, useMemo, useState } from "react";
 // Huizenjacht – single-file MVP (React + Tailwind + Firestore realtime sync)
 // - Firebase Auth (anonymous) + Firestore realtime sync per "Board"
 // - Create/Join board, copy invite link, live multi-device updates
-// - Offline support via Firestore IndexedDB persistence
-// - Backward compatible: if no board selected, localStorage works as before
+// - Offline cache via Firestore persistentLocalCache
+// - Backward compatible: zonder board werkt alles lokaal (localStorage)
 
 // ===================== Firebase setup =====================
 import { initializeApp } from "firebase/app";
@@ -13,11 +13,20 @@ import {
   initializeFirestore,
   persistentLocalCache,
   persistentMultipleTabManager,
-  collection, doc, addDoc, setDoc, updateDoc, deleteDoc,
-  onSnapshot, orderBy, query, serverTimestamp, writeBatch,
+  collection,
+  doc,
+  addDoc,
+  setDoc,
+  updateDoc,
+  deleteDoc,
+  onSnapshot,
+  orderBy,
+  query,
+  serverTimestamp,
+  writeBatch,
 } from "firebase/firestore";
 
-// 🔧 REPLACE with your own Firebase config (or use Vite env vars)
+// 🔧 Vervang met jouw Firebase config of via Vite env vars (Vercel)
 const firebaseConfig = {
   apiKey: import.meta?.env?.VITE_FIREBASE_API_KEY || "AIzaSyAixsEtpf-ZxVEXENyDFdljLVj5jH5Wloo",
   authDomain: import.meta?.env?.VITE_FIREBASE_AUTH_DOMAIN || "huizenjacht-550d8.firebaseapp.com",
@@ -35,13 +44,12 @@ function isFirebaseConfigured(cfg) {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = initializeFirestore(app, {
+  // Robuuster achter proxies/ad-blockers
   experimentalAutoDetectLongPolling: true,
   useFetchStreams: false,
+  // Moderne lokale cache (vervangt enableIndexedDbPersistence)
   localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
 });
-
-
-
 
 // ===================== Constants =====================
 const STORAGE_KEY = "huizenjacht_v1";
@@ -111,7 +119,7 @@ function defaultRatings() {
     location: 0,
     accessibility: 0,
     business: 0,
-    renovation: 0,
+    renovation: 0, // 5 = weinig budget nodig
     parking: 0,
     pool: 0,
     privateAreas: 0,
@@ -138,6 +146,7 @@ function emptyForm() {
     viewingAt: "",
     notes: "",
     ratings: defaultRatings(),
+    order: Date.now(),
   };
 }
 
@@ -177,7 +186,6 @@ function getUrlParts(u) {
     return { host: u, path: "" };
   }
 }
-
 function hostInitial(host) {
   const h = (host || "?").trim();
   return (h[0] || "?").toUpperCase();
@@ -187,9 +195,7 @@ function LinkPreview({ url }) {
   if (!url) return null;
   const parts = getUrlParts(url);
   const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(url);
-    } catch {}
+    try { await navigator.clipboard.writeText(url); } catch {}
   };
   return (
     <div className="flex items-center justify-between gap-3 rounded-xl border bg-slate-50 px-3 py-2">
@@ -203,12 +209,8 @@ function LinkPreview({ url }) {
         </div>
       </div>
       <div className="flex shrink-0 items-center gap-2">
-        <a href={url} target="_blank" rel="noopener noreferrer" className="rounded-lg border px-2 py-1 text-xs hover:bg-white">
-          Open
-        </a>
-        <button onClick={copy} className="rounded-lg border px-2 py-1 text-xs hover:bg-white">
-          Kopieer
-        </button>
+        <a href={url} target="_blank" rel="noopener noreferrer" className="rounded-lg border px-2 py-1 text-xs hover:bg-white">Open</a>
+        <button onClick={copy} className="rounded-lg border px-2 py-1 text-xs hover:bg-white">Kopieer</button>
       </div>
     </div>
   );
@@ -256,13 +258,9 @@ function TopStatusBar({ boardId, liveStatus }) {
       <div className="mx-auto max-w-6xl px-6 py-2 text-xs text-slate-700 flex items-center justify-between">
         <div>
           {boardId ? (
-            <>
-              ⚡ Sync: <span className="font-medium">{liveStatus}</span> · Board: <code className="px-1 rounded bg-slate-100">{boardId}</code>
-            </>
+            <>⚡ Sync: <span className="font-medium">{liveStatus}</span> · Board: <code className="px-1 rounded bg-slate-100">{boardId}</code></>
           ) : (
-            <>
-              ⚠️ Je werkt lokaal — <span className="font-medium">geen sync</span>. Maak of join een board om te delen.
-            </>
+            <>⚠️ Je werkt lokaal — <span className="font-medium">geen sync</span>. Maak of join een board om te delen.</>
           )}
         </div>
       </div>
@@ -272,7 +270,7 @@ function TopStatusBar({ boardId, liveStatus }) {
 
 // ===================== App =====================
 export default function App() {
-  const [items, setItems] = useLocalStorageState([]); // local mode fallback
+  const [items, setItems] = useLocalStorageState([]); // fallback voor lokaal
   const [form, setForm] = useState(emptyForm());
   const [editingId, setEditingId] = useState(null);
   const [filter, setFilter] = useState("");
@@ -288,7 +286,6 @@ export default function App() {
   const [liveStatus, setLiveStatus] = useState("offline");
   const [syncError, setSyncError] = useState(null);
   const [busyCreate, setBusyCreate] = useState(false);
-  const [busyJoin, setBusyJoin] = useState(false);
   const [configOk] = useState(isFirebaseConfigured(firebaseConfig));
 
   // Auth
@@ -303,22 +300,20 @@ export default function App() {
   // Firestore subscription
   useEffect(() => {
     if (!boardId || !user) return;
-    if (typeof localStorage !== "undefined") {
-      localStorage.setItem(BOARD_KEY, boardId);
-    }
+    if (typeof localStorage !== "undefined") localStorage.setItem(BOARD_KEY, boardId);
 
-    // Ensure board doc exists (no-op if already there)
+    // Zorg dat board-doc bestaat
     setDoc(doc(db, "boards", boardId), { createdAt: serverTimestamp() }, { merge: true }).catch(() => {});
 
     const qRef = query(
       collection(db, "boards", boardId, "items"),
-      orderBy("order", "desc") // single orderBy to avoid composite index requirement
+      orderBy("order", "desc") // 1× orderBy → geen composite index nodig
     );
 
     const unsub = onSnapshot(
       qRef,
       (snap) => {
-        const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        const list = snap.docs.map((d) => ({ ...d.data(), id: d.id })); // Firestore ID wint
         setItems(list);
         setLiveStatus("online");
         setSyncError(null);
@@ -330,15 +325,12 @@ export default function App() {
       }
     );
 
-    return () => {
-      setLiveStatus("offline");
-      unsub();
-    };
+    return () => { setLiveStatus("offline"); unsub(); };
   }, [boardId, user]);
 
-  // Ensure legacy items have id (local mode only)
+  // Legacy items id fix (alleen lokaal)
   useEffect(() => {
-    if (boardId) return; // skip when using Firestore
+    if (boardId) return;
     const fixed = items.map((it) => (it.id ? it : { ...it, id: uuid() }));
     if (JSON.stringify(fixed) !== JSON.stringify(items)) setItems(fixed);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -355,7 +347,9 @@ export default function App() {
     setErrors(errs);
     if (Object.keys(errs).length) return;
 
-    const withMeta = { ...form, createdAt: Date.now(), order: Date.now() };
+    const { id: _drop, ...formNoId } = form; // id niet meesturen
+    const withMeta = { ...formNoId, createdAt: Date.now(), order: Date.now() };
+
     if (!boardId) {
       setItems((prev) => [withMeta, ...prev]);
       resetForm();
@@ -386,7 +380,8 @@ export default function App() {
       return;
     }
     try {
-      await updateDoc(doc(db, "boards", boardId, "items", editingId), { ...form });
+      const { id: _idDrop, ...payload } = form; // id niet in payload
+      await updateDoc(doc(db, "boards", boardId, "items", editingId), payload);
       setEditingId(null);
       resetForm();
     } catch (err) {
@@ -480,8 +475,9 @@ export default function App() {
         const batch = writeBatch(db);
         const colRef = collection(db, "boards", boardId, "items");
         data.forEach((d) => {
+          const { id: _old, ...payload } = d;
           const ref = doc(colRef);
-          batch.set(ref, { ...d, createdAt: serverTimestamp(), order: d.order || Date.now() });
+          batch.set(ref, { ...payload, createdAt: serverTimestamp(), order: d.order || Date.now() });
         });
         await batch.commit();
       } catch (err) {
@@ -492,10 +488,7 @@ export default function App() {
   }
 
   function copyBoardLink() {
-    if (!boardId) {
-      alert("Geen board actief. Maak of join eerst een board.");
-      return;
-    }
+    if (!boardId) { alert("Geen board actief. Maak of join eerst een board."); return; }
     const url = `${window.location.origin}${window.location.pathname}?board=${encodeURIComponent(boardId)}`;
     if (navigator.clipboard?.writeText) {
       navigator.clipboard.writeText(url).then(() => alert("Board-link gekopieerd"));
@@ -505,27 +498,21 @@ export default function App() {
   }
 
   async function createBoard() {
-    if (!configOk) {
-      alert("Firebase config ontbreekt of is nog niet ingevuld. Vul je firebaseConfig of env vars.");
-      return;
-    }
+    if (!configOk) { alert("Firebase config ontbreekt of is nog niet ingevuld."); return; }
     setBusyCreate(true);
     const newId = uuid().replace(/[^a-zA-Z0-9_-]/g, "");
     try {
-      if (!auth.currentUser) {
-        await signInAnonymously(auth);
-      }
+      if (!auth.currentUser) await signInAnonymously(auth);
       await setDoc(doc(db, "boards", newId), { owner: auth.currentUser?.uid || null, createdAt: serverTimestamp() });
       setBoardId(newId);
-      if (typeof localStorage !== "undefined") {
-        localStorage.setItem(BOARD_KEY, newId);
-      }
+      if (typeof localStorage !== "undefined") localStorage.setItem(BOARD_KEY, newId);
       if (items && items.length) {
         const batch = writeBatch(db);
         const colRef = collection(db, "boards", newId, "items");
         items.forEach((d) => {
+          const { id: _old, ...payload } = d;
           const ref = doc(colRef);
-          batch.set(ref, { ...d, createdAt: serverTimestamp(), order: d.order || Date.now() });
+          batch.set(ref, { ...payload, createdAt: serverTimestamp(), order: d.order || Date.now() });
         });
         await batch.commit();
       }
@@ -542,9 +529,7 @@ export default function App() {
     const id = prompt("Voer Board ID in (van gedeelde link)", "");
     if (!id) return;
     setBoardId(id.trim());
-    if (typeof localStorage !== "undefined") {
-      localStorage.setItem(BOARD_KEY, id.trim());
-    }
+    if (typeof localStorage !== "undefined") localStorage.setItem(BOARD_KEY, id.trim());
   }
 
   const visible = useMemo(() => {
@@ -552,18 +537,7 @@ export default function App() {
     if (filter.trim()) {
       const q = filter.toLowerCase();
       v = v.filter((it) =>
-        [
-          it.title,
-          it.address,
-          it.city,
-          it.postalCode,
-          it.country,
-          it.agencyName,
-          it.agentName,
-          it.agentEmail,
-          it.agentPhone,
-          it.notes,
-        ]
+        [it.title, it.address, it.city, it.postalCode, it.country, it.agencyName, it.agentName, it.agentEmail, it.agentPhone, it.notes]
           .filter(Boolean)
           .join(" ")
           .toLowerCase()
@@ -585,9 +559,7 @@ export default function App() {
       const asDate = new Date(dt);
       if (!isNaN(asDate)) return asDate.toLocaleString();
       return dt;
-    } catch {
-      return dt;
-    }
+    } catch { return dt; }
   }
 
   // ===================== Render =====================
@@ -598,7 +570,7 @@ export default function App() {
         <header className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <h1 className="text-2xl font-bold">Huizenjacht – MVP</h1>
-            <p className="text-sm text-slate-600">Beheer je bezichtigingen, makelaars en routes. Nu met realtime sync per board.</p>
+            <p className="text-sm text-slate-600">Beheer bezichtigingen, makelaars en routes. Realtime sync per board.</p>
             <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-600">
               <span>Sync status: {liveStatus}</span>
               {boardId && <span className="rounded-full bg-slate-100 px-2 py-0.5">Board: {boardId}</span>}
@@ -619,8 +591,8 @@ export default function App() {
           {!boardId && (
             <>
               <button onClick={createBoard} disabled={busyCreate || !configOk} className="rounded-2xl bg-slate-900 px-4 py-2 text-white shadow hover:opacity-90 disabled:opacity-50">{busyCreate ? "Aanmaken…" : "Nieuw board"}</button>
-              <button onClick={joinBoardPrompt} disabled={busyJoin} className="rounded-2xl border px-4 py-2 shadow-sm disabled:opacity-50">Board joinen</button>
-              {!configOk && (<span className="text-sm text-rose-700">⚠️ Firebase config ontbreekt. Vul je config in App.jsx of zet env vars.</span>)}
+              <button onClick={joinBoardPrompt} className="rounded-2xl border px-4 py-2 shadow-sm">Board joinen</button>
+              {!configOk && (<span className="text-sm text-rose-700">⚠️ Firebase config ontbreekt. Vul je config of env vars.</span>)}
               <span className="text-sm text-slate-600">(zonder board werk je lokaal op dit apparaat)</span>
             </>
           )}
@@ -637,7 +609,7 @@ export default function App() {
             <div className="font-semibold">Sync fout</div>
             <div className="mt-1"><code className="rounded bg-white/60 px-1">{syncError.code || "unknown"}</code> · {syncError.message || String(syncError)}</div>
             {syncError?.code === "failed-precondition" && (
-              <div className="mt-2 text-xs">Tip: maak de Firestore index aan voor <code>items</code> met velden <code>order (desc)</code> en <code>createdAt (desc)</code> via de link in de Console, of laat het zo – de app gebruikt nu een fallback sortering zonder index.</div>
+              <div className="mt-2 text-xs">Tip: maak een composite index voor <code>items</code> met <code>order (desc)</code> en <code>createdAt (desc)</code>. De app gebruikt nu fallback sortering zonder index.</div>
             )}
           </div>
         )}
@@ -649,7 +621,7 @@ export default function App() {
           </div>
         )}
 
-        {/* Form */}
+        {/* Formulier */}
         <section className="mb-8 rounded-2xl border bg-white p-4 shadow-sm">
           <h2 className="mb-3 text-lg font-semibold">{isEditing ? "Woning bewerken" : "Nieuwe woning toevoegen"}</h2>
           <form onSubmit={isEditing ? (e) => { e.preventDefault(); saveEdit(); } : handleSubmit} className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -724,9 +696,7 @@ export default function App() {
               <label className="text-sm font-medium">Status<span className="text-rose-600">*</span></label>
               <select className={`mt-1 w-full rounded-xl border px-3 py-2 ${errors.status ? "border-rose-400" : ""}`} value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
                 <option value="">— Kies status —</option>
-                {STATUS_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>{opt.label}</option>
-                ))}
+                {STATUS_OPTIONS.map((opt) => (<option key={opt.value} value={opt.value}>{opt.label}</option>))}
               </select>
               {errors.status && <p className="text-xs text-rose-600">{errors.status}</p>}
             </div>
@@ -737,9 +707,7 @@ export default function App() {
             </div>
 
             <div className="md:col-span-2 flex items-center gap-2 pt-2">
-              {!isEditing && (
-                <button className="rounded-2xl bg-slate-900 px-4 py-2 text-white shadow hover:opacity-90" type="submit">Toevoegen</button>
-              )}
+              {!isEditing && (<button className="rounded-2xl bg-slate-900 px-4 py-2 text-white shadow hover:opacity-90" type="submit">Toevoegen</button>)}
               {isEditing && (
                 <>
                   <button className="rounded-2xl bg-slate-900 px-4 py-2 text-white shadow hover:opacity-90" type="button" onClick={saveEdit}>Opslaan</button>
@@ -751,7 +719,7 @@ export default function App() {
           </form>
         </section>
 
-        {/* Controls */}
+        {/* Filters/Sortering */}
         <section className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex gap-2">
             <input className="w-64 rounded-xl border px-3 py-2" placeholder="Zoek op adres, plaats, makelaar..." value={filter} onChange={(e) => setFilter(e.target.value)} />
@@ -771,7 +739,7 @@ export default function App() {
           </div>
         </section>
 
-        {/* List */}
+        {/* Lijst */}
         <section className="space-y-3">
           {visible.length === 0 && (<div className="rounded-2xl border bg-white p-6 text-center text-slate-600">Nog geen woningen opgeslagen.</div>)}
           {visible.map((it, idx) => (
@@ -782,13 +750,17 @@ export default function App() {
                     <div className="flex flex-wrap items-center gap-2">
                       <h3 className="text-lg font-semibold">{it.title || "(Geen titel)"}</h3>
                       <span className={badgeClass(it.status)}>{STATUS_OPTIONS.find((s) => s.value === it.status)?.label || it.status}</span>
-                      {averageRating(it.ratings) > 0 && (<span className="ml-2 rounded-full bg-yellow-50 px-2 py-0.5 text-xs font-medium text-amber-700">⭐ {averageRating(it.ratings)}/5</span>)}
+                      {averageRating(it.ratings) > 0 && (
+                        <span className="ml-2 rounded-full bg-yellow-50 px-2 py-0.5 text-xs font-medium text-amber-700">⭐ {averageRating(it.ratings)}/5</span>
+                      )}
                     </div>
                     <p className="text-sm text-slate-700">{it.address && <span>{it.address}, </span>}{[it.postalCode, it.city].filter(Boolean).join(" ")} {it.country ? `, ${it.country}` : ""}</p>
                     {it.agencyName && <p className="text-xs text-slate-600">Makelaardij: {it.agencyName}</p>}
-                    {(it.agentName || it.agentPhone || it.agentEmail) && (<p className="text-xs text-slate-600">Makelaar: {[it.agentName, it.agentPhone, it.agentEmail].filter(Boolean).join(" · ")}</p>)}
+                    {(it.agentName || it.agentPhone || it.agentEmail) && (
+                      <p className="text-xs text-slate-600">Makelaar: {[it.agentName, it.agentPhone, it.agentEmail].filter(Boolean).join(" · ")}</p>
+                    )}
 
-                    {/* Inline bewerken: status + viewingAt */}
+                    {/* Inline wijzigen: status + datum/tijd */}
                     <div className="mt-2 flex flex-wrap items-center gap-2">
                       <label className="text-xs text-slate-600">Status</label>
                       <select className="rounded-lg border px-2 py-1 text-xs" value={it.status} onChange={(e) => updateItem(it.id, { status: e.target.value })}>
@@ -800,7 +772,7 @@ export default function App() {
                       {it.viewingAt && <span className="text-xs text-slate-600">({formatViewing(it.viewingAt)})</span>}
                     </div>
 
-                    {/* Beoordeling */}
+                    {/* Beoordelingen */}
                     <div className="mt-3 rounded-xl border bg-slate-50 p-3">
                       <div className="mb-2 flex items-center justify-between">
                         <h4 className="text-sm font-semibold">Beoordeling</h4>
@@ -817,7 +789,9 @@ export default function App() {
                         <StarRating value={it.ratings?.privateAreas || 0} onChange={(v) => updateRating(it.id, "privateAreas", v)} label="Privévertrekken" />
                         <StarRating value={it.ratings?.feasibility || 0} onChange={(v) => updateRating(it.id, "feasibility", v)} label="Realiseerbaarheid" />
                       </div>
-                      {it.status !== "bezichtigd" && (<p className="mt-2 text-xs text-slate-500">Tip: markeer de status als <em>Bezichtigd</em> zodra je de beoordeling definitief maakt.</p>)}
+                      {it.status !== "bezichtigd" && (
+                        <p className="mt-2 text-xs text-slate-500">Tip: markeer de status als <em>Bezichtigd</em> zodra je de beoordeling definitief maakt.</p>
+                      )}
                     </div>
 
                     {it.notes && <p className="mt-2 text-sm text-slate-600">🗒️ {it.notes}</p>}
@@ -841,7 +815,7 @@ export default function App() {
 
         <footer className="mt-10 space-y-1 text-center text-xs text-slate-500">
           <p>Realtime via Firestore. Zonder board werk je lokaal (alleen dit apparaat).</p>
-          <p>Vergeet niet je Firebase config te vullen en je Vercel-domain toe te voegen bij Authorized domains. · Build: Firestore Sync v1</p>
+          <p>Vergeet niet je Firebase config te vullen en je Vercel-domein toe te voegen bij Authorized domains. · Build: Firestore Sync v1</p>
         </footer>
       </div>
     </div>
