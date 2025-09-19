@@ -7,9 +7,10 @@ import React, { useEffect, useMemo, useState } from "react";
 // - Backward compatible: if no board selected, localStorage works as before
 
 // ===================== Firebase setup =====================
-import { initializeApp } from "firebase/app";
 import {
-  getFirestore,
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
   collection,
   doc,
   addDoc,
@@ -20,8 +21,7 @@ import {
   orderBy,
   query,
   serverTimestamp,
-  writeBatch,
-  enableIndexedDbPersistence,
+  writeBatch
 } from "firebase/firestore";
 import { getAuth, onAuthStateChanged, signInAnonymously } from "firebase/auth";
 
@@ -41,12 +41,12 @@ function isFirebaseConfigured(cfg) {
 }
 
 const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
-const auth = getAuth(app);
-
-// Enable offline persistence (best effort)
-enableIndexedDbPersistence(db).catch((e) => {
-  console.warn("IndexedDB persistence not enabled:", e?.code || e);
+const db = initializeFirestore(app, {
+  // Helps behind strict networks/proxies/ad-blockers
+  experimentalAutoDetectLongPolling: true,
+  useFetchStreams: false,
+  // Modern local cache (replaces enableIndexedDbPersistence)
+  localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
 });
 
 // ===================== Constants =====================
