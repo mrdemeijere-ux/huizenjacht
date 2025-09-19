@@ -7,23 +7,15 @@ import React, { useEffect, useMemo, useState } from "react";
 // - Backward compatible: if no board selected, localStorage works as before
 
 // ===================== Firebase setup =====================
+import { initializeApp } from "firebase/app";
+import { getAuth, onAuthStateChanged, signInAnonymously } from "firebase/auth";
 import {
   initializeFirestore,
   persistentLocalCache,
   persistentMultipleTabManager,
-  collection,
-  doc,
-  addDoc,
-  setDoc,
-  updateDoc,
-  deleteDoc,
-  onSnapshot,
-  orderBy,
-  query,
-  serverTimestamp,
-  writeBatch
+  collection, doc, addDoc, setDoc, updateDoc, deleteDoc,
+  onSnapshot, orderBy, query, serverTimestamp, writeBatch,
 } from "firebase/firestore";
-import { getAuth, onAuthStateChanged, signInAnonymously } from "firebase/auth";
 
 // 🔧 REPLACE with your own Firebase config (or use Vite env vars)
 const firebaseConfig = {
@@ -41,13 +33,15 @@ function isFirebaseConfigured(cfg) {
 }
 
 const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
 const db = initializeFirestore(app, {
-  // Helps behind strict networks/proxies/ad-blockers
   experimentalAutoDetectLongPolling: true,
   useFetchStreams: false,
-  // Modern local cache (replaces enableIndexedDbPersistence)
   localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
 });
+
+
+
 
 // ===================== Constants =====================
 const STORAGE_KEY = "huizenjacht_v1";
