@@ -186,34 +186,49 @@ function LinkChip({ url }) {
 function SmartLinkPreview({ url }) {
   const [meta, setMeta] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
   const endpoint = import.meta?.env?.VITE_LINK_PREVIEW_ENDPOINT;
+  const parts = getUrlParts(url || "");
 
   useEffect(() => {
     let alive = true;
+    setError(null);
+    setMeta(null);
     if (!endpoint || !url) return;
+
     setLoading(true);
-    fetch(`${endpoint}?url=${encodeURIComponent(url)}`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
+    const target = `${endpoint}?url=${encodeURIComponent(url)}`;
+    fetch(target)
+      .then(async (r) => {
         if (!alive) return;
-        setMeta(data && (data.title || data.image || data.description) ? data : null);
-      })
-      .catch(() => {
+        if (!r.ok) {
+          setError(`HTTP ${r.status}`);
+          return;
+        }
+        const data = await r.json().catch(() => null);
         if (!alive) return;
-        setMeta(null);
+        if (data && (data.title || data.image || data.description)) {
+          setMeta(data);
+        } else {
+          // Geen bruikbare OG-tags → fallback
+          setMeta(null);
+        }
       })
-      .finally(() => {
-        if (alive) setLoading(false);
-      });
+      .catch((e) => {
+        if (!alive) return;
+        setError(e?.message || String(e));
+      })
+      .finally(() => alive && setLoading(false));
+
     return () => {
       alive = false;
     };
   }, [endpoint, url]);
 
-  if (!endpoint) return null; // geen compacte fallback meer
+  if (!endpoint || !url) return null; // endpoint niet geconfigureerd → sla over
 
+  // Volwaardige kaart
   if (meta) {
-    const parts = getUrlParts(url);
     return (
       <a
         href={url}
@@ -239,6 +254,7 @@ function SmartLinkPreview({ url }) {
     );
   }
 
+  // Skeleton tijdens laden
   if (loading) {
     return (
       <div className="flex items-center gap-3 rounded-xl border bg-slate-50 px-3 py-2 animate-pulse">
@@ -251,7 +267,27 @@ function SmartLinkPreview({ url }) {
     );
   }
 
-  return null;
+  // Fallback-kaartje wanneer OG-meta ontbreekt of request faalt
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="flex items-center justify-between gap-3 rounded-xl border bg-slate-50 px-3 py-2"
+      title={error ? `Preview niet beschikbaar: ${error}` : url}
+    >
+      <div className="flex min-w-0 items-center gap-3">
+        <div className="h-6 w-6 rounded-md bg-slate-200 flex items-center justify-center text-[10px] font-bold text-slate-700">
+          {hostInitial(parts.host)}
+        </div>
+        <div className="min-w-0">
+          <div className="truncate text-sm font-medium">{parts.host || "Open link"}</div>
+          {parts.path && <div className="truncate text-[11px] text-slate-600">{parts.path}</div>}
+        </div>
+      </div>
+      <span className="rounded-lg border px-2 py-1 text-[11px] text-slate-700">Open</span>
+    </a>
+  );
 }
 
 function StarRating({ value = 0, onChange, size = "md", label, hint }) {
