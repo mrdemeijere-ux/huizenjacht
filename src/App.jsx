@@ -44,10 +44,8 @@ function isFirebaseConfigured(cfg) {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = initializeFirestore(app, {
-  // Robuuster achter proxies/ad-blockers
   experimentalAutoDetectLongPolling: true,
   useFetchStreams: false,
-  // Moderne lokale cache (vervangt enableIndexedDbPersistence)
   localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
 });
 
@@ -151,32 +149,17 @@ function emptyForm() {
   };
 }
 
-function buildGoogleMapsUrl(item) {
-  const hasCoords = item.lat && item.lng;
-  if (hasCoords) {
-    return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${item.lat},${item.lng}`)}`;
+function formatEUR(value) {
+  try {
+    if (value == null || value === "" || isNaN(Number(value))) return "";
+    return new Intl.NumberFormat("nl-NL", {
+      style: "currency",
+      currency: "EUR",
+      maximumFractionDigits: 0,
+    }).format(Number(value));
+  } catch {
+    return `€ ${Number(value || 0).toLocaleString("nl-NL")}`;
   }
-  const q = [item.address, item.postalCode, item.city, item.country].filter(Boolean).join(", ");
-  return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(q)}`;
-}
-
-function buildOsmUrl(item) {
-  if (item.lat && item.lng) {
-    const coords = `;${item.lat},${item.lng}`;
-    return `https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=${encodeURIComponent(coords)}`;
-  }
-  const q = [item.address, item.postalCode, item.city, item.country].filter(Boolean).join(", ");
-  return `https://www.openstreetmap.org/search?query=${encodeURIComponent(q)}`;
-}
-
-function validate(item) {
-  const errors = {};
-  if (!item.title?.trim()) errors.title = "Titel is verplicht";
-  if (!item.url?.trim()) errors.url = "Link is verplicht";
-  if (!item.address?.trim() && !(item.lat && item.lng)) errors.address = "Adres of GPS is verplicht";
-  if (!item.city?.trim() && !(item.lat && item.lng)) errors.city = "Plaats is verplicht";
-  if (!item.status) errors.status = "Status is verplicht";
-  return errors;
 }
 
 function getUrlParts(u) {
@@ -192,48 +175,76 @@ function hostInitial(host) {
   return (h[0] || "?").toUpperCase();
 }
 
-function LinkPreview({ url }) {
-  if (!url) return null;
-  const parts = getUrlParts(url);
-  const copy = async () => {
-    try { await navigator.clipboard.writeText(url); } catch {}
-  };
-  return (
-    <div className="flex items-center justify-between gap-3 rounded-xl border bg-slate-50 px-3 py-2">
-      <div className="flex min-w-0 items-center gap-3">
-        <div className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-300 text-[10px] font-bold text-slate-800">
-          {hostInitial(parts.host)}
-        </div>
-        <div className="min-w-0">
-          <div className="truncate text-sm font-medium">{parts.host}</div>
-          <div className="truncate text-xs text-slate-600">{parts.path}</div>
-        </div>
-      </div>
-      <div className="flex shrink-0 items-center gap-2">
-        <a href={url} target="_blank" rel="noopener noreferrer" className="rounded-lg border px-2 py-1 text-xs hover:bg-white">Open</a>
-        <button onClick={copy} className="rounded-lg border px-2 py-1 text-xs hover:bg-white">Kopieer</button>
-      </div>
-    </div>
-  );
-}
+// Rich link preview (server-side metadata fetch via Vercel function)
+function SmartLinkPreview({ url }) {
+  const [meta, setMeta] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const endpoint = import.meta?.env?.VITE_LINK_PREVIEW_ENDPOINT;
 
-function LinkChip({ url }) {
-  if (!url) return null;
-  const parts = getUrlParts(url);
-  return (
-    <a
-      href={url}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="inline-flex max-w-[180px] items-center gap-1 rounded-full border px-2 py-0.5 text-xs hover:bg-slate-50"
-      title={url}
-    >
-      <span className="flex h-4 w-4 items-center justify-center rounded-full bg-slate-200 text-[10px] font-bold text-slate-700">
-        {hostInitial(parts.host)}
-      </span>
-      <span className="truncate">{parts.host}</span>
-    </a>
-  );
+  useEffect(() => {
+    let alive = true;
+    if (!endpoint || !url) return;
+    setLoading(true);
+    fetch(`${endpoint}?url=${encodeURIComponent(url)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!alive) return;
+        setMeta(data && (data.title || data.image || data.description) ? data : null);
+      })
+      .catch(() => {
+        if (!alive) return;
+        setMeta(null);
+      })
+      .finally(() => {
+        if (alive) setLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [endpoint, url]);
+
+  if (!endpoint) return null; // compacte preview is verwijderd
+
+  if (meta) {
+    const parts = getUrlParts(url);
+    return (
+      <a
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex gap-3 rounded-xl border bg-white hover:bg-slate-50 transition px-3 py-3"
+      >
+        {meta.image ? (
+          <img src={meta.image} alt="" className="h-16 w-24 rounded-lg object-cover border" />
+        ) : (
+          <div className="h-16 w-24 rounded-lg bg-slate-100 border flex items-center justify-center text-slate-400 text-xs">
+            {hostInitial(parts.host)}
+          </div>
+        )}
+        <div className="min-w-0">
+          <div className="truncate text-sm font-semibold">{meta.title || parts.host}</div>
+          {meta.description && (
+            <div className="mt-0.5 line-clamp-2 text-xs text-slate-600">{meta.description}</div>
+          )}
+          <div className="mt-1 text-[11px] text-slate-500 truncate">{meta.siteName || parts.host}</div>
+        </div>
+      </a>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center gap-3 rounded-xl border bg-slate-50 px-3 py-2 animate-pulse">
+        <div className="h-6 w-6 rounded-full bg-slate-200" />
+        <div className="flex-1 space-y-1">
+          <div className="h-3 w-40 bg-slate-200 rounded" />
+          <div className="h-2 w-24 bg-slate-200 rounded" />
+        </div>
+      </div>
+    );
+  }
+
+  return null; // geen compacte fallback
 }
 
 function StarRating({ value = 0, onChange, size = "md", label, hint }) {
@@ -259,7 +270,11 @@ function StarRating({ value = 0, onChange, size = "md", label, hint }) {
           </button>
         ))}
       </div>
-      {value ? <span className="text-xs text-slate-600">{value}/5</span> : <span className="text-xs text-slate-400">–</span>}
+      {value ? (
+        <span className="text-xs text-slate-600">{value}/5</span>
+      ) : (
+        <span className="text-xs text-slate-400">–</span>
+      )}
       {hint && <span className="ml-2 text-[11px] text-slate-500">{hint}</span>}
     </div>
   );
@@ -272,20 +287,15 @@ function averageRating(ratings) {
   return Math.round((vals.reduce((a, b) => a + Number(b), 0) / vals.length) * 10) / 10;
 }
 
-function formatEUR(value){
-  try{
-    if(value==null || value === "" || isNaN(Number(value))) return "";
-    return new Intl.NumberFormat('nl-NL',{style:'currency',currency:'EUR',maximumFractionDigits:0}).format(Number(value));
-  }catch{ return `€ ${Number(value||0).toLocaleString('nl-NL')}` }
-}
-
 function TopStatusBar({ boardId, liveStatus }) {
   return (
     <div className="sticky top-0 z-50 w-full border-b bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/60">
       <div className="mx-auto max-w-6xl px-6 py-2 text-xs text-slate-700 flex items-center justify-between">
         <div>
           {boardId ? (
-            <>⚡ Sync: <span className="font-medium">{liveStatus}</span> · Board: <code className="px-1 rounded bg-slate-100">{boardId}</code></>
+            <>
+              ⚡ Sync: <span className="font-medium">{liveStatus}</span> · Board: <code className="px-1 rounded bg-slate-100">{boardId}</code>
+            </>
           ) : (
             <>⚠️ Je werkt lokaal — <span className="font-medium">geen sync</span>. Maak of join een board om te delen.</>
           )}
@@ -308,7 +318,9 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [boardId, setBoardId] = useState(() => {
     const urlBoard = new URLSearchParams(window.location.search).get("board");
-    return urlBoard || (typeof localStorage !== "undefined" ? localStorage.getItem(BOARD_KEY) : "") || "";
+    return (
+      urlBoard || (typeof localStorage !== "undefined" ? localStorage.getItem(BOARD_KEY) : "") || ""
+    );
   });
   const [liveStatus, setLiveStatus] = useState("offline");
   const [syncError, setSyncError] = useState(null);
@@ -334,7 +346,7 @@ export default function App() {
 
     const qRef = query(
       collection(db, "boards", boardId, "items"),
-      orderBy("order", "desc") // 1× orderBy → geen composite index nodig
+      orderBy("order", "desc")
     );
 
     const unsub = onSnapshot(
@@ -352,7 +364,10 @@ export default function App() {
       }
     );
 
-    return () => { setLiveStatus("offline"); unsub(); };
+    return () => {
+      setLiveStatus("offline");
+      unsub();
+    };
   }, [boardId, user]);
 
   // Legacy items id fix (alleen lokaal)
@@ -383,7 +398,10 @@ export default function App() {
       return;
     }
     try {
-      await addDoc(collection(db, "boards", boardId, "items"), { ...withMeta, createdAt: serverTimestamp() });
+      await addDoc(collection(db, "boards", boardId, "items"), {
+        ...withMeta,
+        createdAt: serverTimestamp(),
+      });
       resetForm();
     } catch (err) {
       alert("Opslaan in Firestore mislukt: " + (err?.message || String(err)));
@@ -504,7 +522,11 @@ export default function App() {
         data.forEach((d) => {
           const { id: _old, ...payload } = d;
           const ref = doc(colRef);
-          batch.set(ref, { ...payload, createdAt: serverTimestamp(), order: d.order || Date.now() });
+          batch.set(ref, {
+            ...payload,
+            createdAt: serverTimestamp(),
+            order: d.order || Date.now(),
+          });
         });
         await batch.commit();
       } catch (err) {
@@ -515,8 +537,13 @@ export default function App() {
   }
 
   function copyBoardLink() {
-    if (!boardId) { alert("Geen board actief. Maak of join eerst een board."); return; }
-    const url = `${window.location.origin}${window.location.pathname}?board=${encodeURIComponent(boardId)}`;
+    if (!boardId) {
+      alert("Geen board actief. Maak of join eerst een board.");
+      return;
+    }
+    const url = `${window.location.origin}${window.location.pathname}?board=${encodeURIComponent(
+      boardId
+    )}`;
     if (navigator.clipboard?.writeText) {
       navigator.clipboard.writeText(url).then(() => alert("Board-link gekopieerd"));
     } else {
@@ -525,12 +552,18 @@ export default function App() {
   }
 
   async function createBoard() {
-    if (!configOk) { alert("Firebase config ontbreekt of is nog niet ingevuld."); return; }
+    if (!configOk) {
+      alert("Firebase config ontbreekt of is nog niet ingevuld.");
+      return;
+    }
     setBusyCreate(true);
     const newId = uuid().replace(/[^a-zA-Z0-9_-]/g, "");
     try {
       if (!auth.currentUser) await signInAnonymously(auth);
-      await setDoc(doc(db, "boards", newId), { owner: auth.currentUser?.uid || null, createdAt: serverTimestamp() });
+      await setDoc(doc(db, "boards", newId), {
+        owner: auth.currentUser?.uid || null,
+        createdAt: serverTimestamp(),
+      });
       setBoardId(newId);
       if (typeof localStorage !== "undefined") localStorage.setItem(BOARD_KEY, newId);
       if (items && items.length) {
@@ -539,7 +572,11 @@ export default function App() {
         items.forEach((d) => {
           const { id: _old, ...payload } = d;
           const ref = doc(colRef);
-          batch.set(ref, { ...payload, createdAt: serverTimestamp(), order: d.order || Date.now() });
+          batch.set(ref, {
+            ...payload,
+            createdAt: serverTimestamp(),
+            order: d.order || Date.now(),
+          });
         });
         await batch.commit();
       }
@@ -564,7 +601,19 @@ export default function App() {
     if (filter.trim()) {
       const q = filter.toLowerCase();
       v = v.filter((it) =>
-        [it.title, it.address, it.city, it.postalCode, it.country, it.agencyName, it.agentName, it.agentEmail, it.agentPhone, it.notes, it.price != null ? String(it.price) : ""]
+        [
+          it.title,
+          it.address,
+          it.city,
+          it.postalCode,
+          it.country,
+          it.agencyName,
+          it.agentName,
+          it.agentEmail,
+          it.agentPhone,
+          it.notes,
+          it.price != null ? String(it.price) : "",
+        ]
           .filter(Boolean)
           .join(" ")
           .toLowerCase()
@@ -575,8 +624,8 @@ export default function App() {
     if (sortBy === "createdDesc") v.sort((a, b) => (b.order || 0) - (a.order || 0));
     if (sortBy === "cityAsc") v.sort((a, b) => (a.city || "").localeCompare(b.city || ""));
     if (sortBy === "statusAsc") v.sort((a, b) => (a.status || "").localeCompare(b.status || ""));
-    if (sortBy === "priceAsc") v.sort((a,b)=> (Number(a.price)||0) - (Number(b.price)||0));
-    if (sortBy === "priceDesc") v.sort((a,b)=> (Number(b.price)||0) - (Number(a.price)||0));
+    if (sortBy === "priceAsc") v.sort((a, b) => (Number(a.price) || 0) - (Number(b.price) || 0));
+    if (sortBy === "priceDesc") v.sort((a, b) => (Number(b.price) || 0) - (Number(a.price) || 0));
     return v;
   }, [items, filter, statusFilter, sortBy]);
 
@@ -588,7 +637,9 @@ export default function App() {
       const asDate = new Date(dt);
       if (!isNaN(asDate)) return asDate.toLocaleString();
       return dt;
-    } catch { return dt; }
+    } catch {
+      return dt;
+    }
   }
 
   // ===================== Render =====================
@@ -599,19 +650,38 @@ export default function App() {
         <header className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <h1 className="text-2xl font-bold">Huizenjacht – MVP</h1>
-            <p className="text-sm text-slate-600">Beheer bezichtigingen, makelaars en routes. Realtime sync per board.</p>
+            <p className="text-sm text-slate-600">
+              Beheer bezichtigingen, makelaars en routes. Realtime sync per board.
+            </p>
             <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-600">
               <span>Sync status: {liveStatus}</span>
-              {boardId && <span className="rounded-full bg-slate-100 px-2 py-0.5">Board: {boardId}</span>}
+              {boardId && (
+                <span className="rounded-full bg-slate-100 px-2 py-0.5">Board: {boardId}</span>
+              )}
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <label className="inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm shadow-sm">
               <span>Importeer JSON</span>
-              <input type="file" accept="application/json" className="hidden" onChange={(e) => e.target.files?.[0] && importJson(e.target.files[0])} />
+              <input
+                type="file"
+                accept="application/json"
+                className="hidden"
+                onChange={(e) => e.target.files?.[0] && importJson(e.target.files[0])}
+              />
             </label>
-            <button onClick={exportJson} className="rounded-xl border px-3 py-2 text-sm shadow-sm hover:bg-slate-50">Exporteer JSON</button>
-            <button onClick={copyBoardLink} className="rounded-xl border px-3 py-2 text-sm shadow-sm hover:bg-slate-50">Kopieer board-link</button>
+            <button
+              onClick={exportJson}
+              className="rounded-xl border px-3 py-2 text-sm shadow-sm hover:bg-slate-50"
+            >
+              Exporteer JSON
+            </button>
+            <button
+              onClick={copyBoardLink}
+              className="rounded-xl border px-3 py-2 text-sm shadow-sm hover:bg-slate-50"
+            >
+              Kopieer board-link
+            </button>
           </div>
         </header>
 
@@ -619,16 +689,43 @@ export default function App() {
         <section className="mb-4 flex flex-wrap items-center gap-2">
           {!boardId && (
             <>
-              <button onClick={createBoard} disabled={busyCreate || !configOk} className="rounded-2xl bg-slate-900 px-4 py-2 text-white shadow hover:opacity-90 disabled:opacity-50">{busyCreate ? "Aanmaken…" : "Nieuw board"}</button>
-              <button onClick={joinBoardPrompt} className="rounded-2xl border px-4 py-2 shadow-sm">Board joinen</button>
-              {!configOk && (<span className="text-sm text-rose-700">⚠️ Firebase config ontbreekt. Vul je config of env vars.</span>)}
-              <span className="text-sm text-slate-600">(zonder board werk je lokaal op dit apparaat)</span>
+              <button
+                onClick={createBoard}
+                disabled={busyCreate || !configOk}
+                className="rounded-2xl bg-slate-900 px-4 py-2 text-white shadow hover:opacity-90 disabled:opacity-50"
+              >
+                {busyCreate ? "Aanmaken…" : "Nieuw board"}
+              </button>
+              <button
+                onClick={joinBoardPrompt}
+                className="rounded-2xl border px-4 py-2 shadow-sm"
+              >
+                Board joinen
+              </button>
+              {!configOk && (
+                <span className="text-sm text-rose-700">
+                  ⚠️ Firebase config ontbreekt. Vul je config of env vars.
+                </span>
+              )}
+              <span className="text-sm text-slate-600">
+                (zonder board werk je lokaal op dit apparaat)
+              </span>
             </>
           )}
           {boardId && (
             <>
-              <button onClick={() => { if (typeof localStorage !== "undefined") localStorage.removeItem(BOARD_KEY); setBoardId(""); }} className="rounded-2xl border px-4 py-2 shadow-sm">Board verlaten</button>
-              <button onClick={copyBoardLink} className="rounded-2xl border px-4 py-2 shadow-sm">Deel invite-link</button>
+              <button
+                onClick={() => {
+                  if (typeof localStorage !== "undefined") localStorage.removeItem(BOARD_KEY);
+                  setBoardId("");
+                }}
+                className="rounded-2xl border px-4 py-2 shadow-sm"
+              >
+                Board verlaten
+              </button>
+              <button onClick={copyBoardLink} className="rounded-2xl border px-4 py-2 shadow-sm">
+                Deel invite-link
+              </button>
             </>
           )}
         </section>
@@ -636,120 +733,263 @@ export default function App() {
         {syncError && (
           <div className="mb-4 rounded-xl border border-rose-300 bg-rose-50 p-3 text-sm text-rose-900">
             <div className="font-semibold">Sync fout</div>
-            <div className="mt-1"><code className="rounded bg-white/60 px-1">{syncError.code || "unknown"}</code> · {syncError.message || String(syncError)}</div>
-            {syncError?.code === "failed-precondition" && (
-              <div className="mt-2 text-xs">Tip: maak een composite index voor <code>items</code> met <code>order (desc)</code> en <code>createdAt (desc)</code>. De app gebruikt nu fallback sortering zonder index.</div>
-            )}
+            <div className="mt-1">
+              <code className="rounded bg-white/60 px-1">{syncError.code || "unknown"}</code> ·{" "}
+              {syncError.message || String(syncError)}
+            </div>
           </div>
         )}
 
         {!boardId && (
           <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
             <div className="font-medium">Je werkt nu lokaal (alleen dit apparaat).</div>
-            <div>Gebruik <span className="font-semibold">Nieuw board</span> of <span className="font-semibold">Board joinen</span> om te synchroniseren met andere apparaten.</div>
+            <div>
+              Gebruik <span className="font-semibold">Nieuw board</span> of{" "}
+              <span className="font-semibold">Board joinen</span> om te synchroniseren met andere
+              apparaten.
+            </div>
           </div>
         )}
 
         {/* Formulier */}
         <section className="mb-8 rounded-2xl border bg-white p-4 shadow-sm">
-          <h2 className="mb-3 text-lg font-semibold">{isEditing ? "Woning bewerken" : "Nieuwe woning toevoegen"}</h2>
-          <form onSubmit={isEditing ? (e) => { e.preventDefault(); saveEdit(); } : handleSubmit} className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <h2 className="mb-3 text-lg font-semibold">
+            {isEditing ? "Woning bewerken" : "Nieuwe woning toevoegen"}
+          </h2>
+          <form
+            onSubmit={isEditing ? (e) => { e.preventDefault(); saveEdit(); } : handleSubmit}
+            className="grid grid-cols-1 gap-4 md:grid-cols-2"
+          >
             <div>
-              <label className="text-sm font-medium">Titel / Naam woning<span className="text-rose-600">*</span></label>
-              <input className={`${"mt-1 w-full rounded-xl border px-3 py-2"} ${errors.title ? "border-rose-400" : ""}`} placeholder="Bijv. Charmehuisje bij Dijon" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
+              <label className="text-sm font-medium">
+                Titel / Naam woning<span className="text-rose-600">*</span>
+              </label>
+              <input
+                className={`${"mt-1 w-full rounded-xl border px-3 py-2"} ${
+                  errors.title ? "border-rose-400" : ""
+                }`}
+                placeholder="Bijv. Charmehuisje bij Dijon"
+                value={form.title}
+                onChange={(e) => setForm({ ...form, title: e.target.value })}
+              />
               {errors.title && <p className="text-xs text-rose-600">{errors.title}</p>}
             </div>
             <div>
-              <label className="text-sm font-medium">Link naar woning<span className="text-rose-600">*</span></label>
-              <input className={`${"mt-1 w-full rounded-xl border px-3 py-2"} ${errors.url ? "border-rose-400" : ""}`} placeholder="https://..." value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} />
+              <label className="text-sm font-medium">
+                Link naar woning<span className="text-rose-600">*</span>
+              </label>
+              <input
+                className={`${"mt-1 w-full rounded-xl border px-3 py-2"} ${
+                  errors.url ? "border-rose-400" : ""
+                }`}
+                placeholder="https://..."
+                value={form.url}
+                onChange={(e) => setForm({ ...form, url: e.target.value })}
+              />
               {errors.url && <p className="text-xs text-rose-600">{errors.url}</p>}
-            </div>
-
-            <div>
-              <label className="text-sm font-medium">Prijs (EUR)</label>
-              <input type="number" inputMode="decimal" className="mt-1 w-full rounded-xl border px-3 py-2" placeholder="350000" value={form.price ?? ''} onChange={(e)=> setForm({...form, price: e.target.value === '' ? '' : Number(e.target.value)})} />
-              <p className="text-xs text-slate-500 mt-1">Vul een bedrag in zonder punten of €-teken, bijv. 350000.</p>
             </div>
 
             <div className="md:col-span-2 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <div>
-                <label className="text-sm font-medium">Adres<span className="text-rose-600">*</span></label>
-                <input className={`${"mt-1 w-full rounded-xl border px-3 py-2"} ${errors.address ? "border-rose-400" : ""}`} placeholder="Rue de ... 12" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
+                <label className="text-sm font-medium">
+                  Adres<span className="text-rose-600">*</span>
+                </label>
+                <input
+                  className={`${"mt-1 w-full rounded-xl border px-3 py-2"} ${
+                    errors.address ? "border-rose-400" : ""
+                  }`}
+                  placeholder="Rue de ... 12"
+                  value={form.address}
+                  onChange={(e) => setForm({ ...form, address: e.target.value })}
+                />
                 {errors.address && <p className="text-xs text-rose-600">{errors.address}</p>}
               </div>
               <div>
                 <label className="text-sm font-medium">Postcode<span className="text-rose-600 opacity-0">*</span></label>
-                <input className="mt-1 w-full rounded-xl border px-3 py-2" placeholder="75001" value={form.postalCode} onChange={(e) => setForm({ ...form, postalCode: e.target.value })} />
+                <input
+                  className="mt-1 w-full rounded-xl border px-3 py-2"
+                  placeholder="75001"
+                  value={form.postalCode}
+                  onChange={(e) => setForm({ ...form, postalCode: e.target.value })}
+                />
               </div>
               <div>
-                <label className="text-sm font-medium">Plaats<span className="text-rose-600">*</span></label>
-                <input className={`${"mt-1 w-full rounded-xl border px-3 py-2"} ${errors.city ? "border-rose-400" : ""}`} placeholder="Paris" value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} />
+                <label className="text-sm font-medium">
+                  Plaats<span className="text-rose-600">*</span>
+                </label>
+                <input
+                  className={`${"mt-1 w-full rounded-xl border px-3 py-2"} ${
+                    errors.city ? "border-rose-400" : ""
+                  }`}
+                  placeholder="Paris"
+                  value={form.city}
+                  onChange={(e) => setForm({ ...form, city: e.target.value })}
+                />
                 {errors.city && <p className="text-xs text-rose-600">{errors.city}</p>}
               </div>
               <div>
                 <label className="text-sm font-medium">Land</label>
-                <input className="mt-1 w-full rounded-xl border px-3 py-2" value={form.country} onChange={(e) => setForm({ ...form, country: e.target.value })} />
+                <input
+                  className="mt-1 w-full rounded-xl border px-3 py-2"
+                  value={form.country}
+                  onChange={(e) => setForm({ ...form, country: e.target.value })}
+                />
               </div>
+            </div>
+
+            <div>
+              <label className="text-sm font-medium">Prijs (EUR)</label>
+              <input
+                type="number"
+                inputMode="decimal"
+                className="mt-1 w-full rounded-xl border px-3 py-2"
+                placeholder="350000"
+                value={form.price ?? ""}
+                onChange={(e) =>
+                  setForm({ ...form, price: e.target.value === "" ? "" : Number(e.target.value) })
+                }
+              />
+              <p className="text-xs text-slate-500 mt-1">
+                Vul een bedrag in zonder punten of €-teken, bijv. 350000.
+              </p>
             </div>
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
                 <label className="text-sm font-medium">GPS Latitude (opt.)</label>
-                <input className="mt-1 w-full rounded-xl border px-3 py-2" placeholder="48.8566" value={form.lat} onChange={(e) => setForm({ ...form, lat: e.target.value })} />
+                <input
+                  className="mt-1 w-full rounded-xl border px-3 py-2"
+                  placeholder="48.8566"
+                  value={form.lat}
+                  onChange={(e) => setForm({ ...form, lat: e.target.value })}
+                />
               </div>
               <div>
                 <label className="text-sm font-medium">GPS Longitude (opt.)</label>
-                <input className="mt-1 w-full rounded-xl border px-3 py-2" placeholder="2.3522" value={form.lng} onChange={(e) => setForm({ ...form, lng: e.target.value })} />
+                <input
+                  className="mt-1 w-full rounded-xl border px-3 py-2"
+                  placeholder="2.3522"
+                  value={form.lng}
+                  onChange={(e) => setForm({ ...form, lng: e.target.value })}
+                />
               </div>
             </div>
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-4 md:col-span-2">
               <div className="sm:col-span-2">
                 <label className="text-sm font-medium">Makelaardij</label>
-                <input className="mt-1 w-full rounded-xl border px-3 py-2" placeholder="Agence BelleMaison" value={form.agencyName} onChange={(e) => setForm({ ...form, agencyName: e.target.value })} />
+                <input
+                  className="mt-1 w-full rounded-xl border px-3 py-2"
+                  placeholder="Agence BelleMaison"
+                  value={form.agencyName}
+                  onChange={(e) => setForm({ ...form, agencyName: e.target.value })}
+                />
               </div>
               <div>
                 <label className="text-sm font-medium">Makelaar naam</label>
-                <input className="mt-1 w-full rounded-xl border px-3 py-2" placeholder="Mme Dupont" value={form.agentName} onChange={(e) => setForm({ ...form, agentName: e.target.value })} />
+                <input
+                  className="mt-1 w-full rounded-xl border px-3 py-2"
+                  placeholder="Mme Dupont"
+                  value={form.agentName}
+                  onChange={(e) => setForm({ ...form, agentName: e.target.value })}
+                />
               </div>
               <div>
                 <label className="text-sm font-medium">Makelaar telefoon</label>
-                <input className="mt-1 w-full rounded-xl border px-3 py-2" placeholder="+33 ..." value={form.agentPhone} onChange={(e) => setForm({ ...form, agentPhone: e.target.value })} />
+                <input
+                  className="mt-1 w-full rounded-xl border px-3 py-2"
+                  placeholder="+33 ..."
+                  value={form.agentPhone}
+                  onChange={(e) => setForm({ ...form, agentPhone: e.target.value })}
+                />
               </div>
               <div className="sm:col-span-2">
                 <label className="text-sm font-medium">Makelaar e‑mail</label>
-                <input className="mt-1 w-full rounded-xl border px-3 py-2" placeholder="makelaar@bedrijf.fr" value={form.agentEmail} onChange={(e) => setForm({ ...form, agentEmail: e.target.value })} />
+                <input
+                  className="mt-1 w-full rounded-xl border px-3 py-2"
+                  placeholder="makelaar@bedrijf.fr"
+                  value={form.agentEmail}
+                  onChange={(e) => setForm({ ...form, agentEmail: e.target.value })}
+                />
               </div>
               <div className="sm:col-span-2">
                 <label className="text-sm font-medium">Geplande bezichtiging (datum/tijd)</label>
-                <input type="datetime-local" className="mt-1 w-full rounded-xl border px-3 py-2" value={form.viewingAt} onChange={(e) => setForm({ ...form, viewingAt: e.target.value })} />
+                <input
+                  type="datetime-local"
+                  className="mt-1 w-full rounded-xl border px-3 py-2"
+                  value={form.viewingAt}
+                  onChange={(e) => setForm({ ...form, viewingAt: e.target.value })}
+                />
                 <p className="mt-1 text-xs text-slate-500">Tip: dit gebruikt je lokale tijdzone.</p>
               </div>
             </div>
 
             <div>
-              <label className="text-sm font-medium">Status<span className="text-rose-600">*</span></label>
-              <select className={`${"mt-1 w-full rounded-xl border px-3 py-2"} ${errors.status ? "border-rose-400" : ""}`} value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
+              <label className="text-sm font-medium">
+                Status<span className="text-rose-600">*</span>
+              </label>
+              <select
+                className={`${"mt-1 w-full rounded-xl border px-3 py-2"} ${
+                  errors.status ? "border-rose-400" : ""
+                }`}
+                value={form.status}
+                onChange={(e) => setForm({ ...form, status: e.target.value })}
+              >
                 <option value="">— Kies status —</option>
-                {STATUS_OPTIONS.map((opt) => (<option key={opt.value} value={opt.value}>{opt.label}</option>))}
+                {STATUS_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
               </select>
               {errors.status && <p className="text-xs text-rose-600">{errors.status}</p>}
             </div>
 
             <div>
               <label className="text-sm font-medium">Notities</label>
-              <textarea className="mt-1 w-full rounded-xl border px-3 py-2" rows={2} placeholder="Parkeren bij achteringang, sleutel ophalen bij buur..." value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+              <textarea
+                className="mt-1 w-full rounded-xl border px-3 py-2"
+                rows={2}
+                placeholder="Parkeren bij achteringang, sleutel ophalen bij buur..."
+                value={form.notes}
+                onChange={(e) => setForm({ ...form, notes: e.target.value })}
+              />
             </div>
 
             <div className="md:col-span-2 flex items-center gap-2 pt-2">
-              {!isEditing && (<button className="rounded-2xl bg-slate-900 px-4 py-2 text-white shadow hover:opacity-90" type="submit">Toevoegen</button>)}
+              {!isEditing && (
+                <button
+                  className="rounded-2xl bg-slate-900 px-4 py-2 text-white shadow hover:opacity-90"
+                  type="submit"
+                >
+                  Toevoegen
+                </button>
+              )}
               {isEditing && (
                 <>
-                  <button className="rounded-2xl bg-slate-900 px-4 py-2 text-white shadow hover:opacity-90" type="button" onClick={saveEdit}>Opslaan</button>
-                  <button className="rounded-2xl border px-4 py-2 shadow-sm" type="button" onClick={cancelEdit}>Annuleren</button>
+                  <button
+                    className="rounded-2xl bg-slate-900 px-4 py-2 text-white shadow hover:opacity-90"
+                    type="button"
+                    onClick={saveEdit}
+                  >
+                    Opslaan
+                  </button>
+                  <button
+                    className="rounded-2xl border px-4 py-2 shadow-sm"
+                    type="button"
+                    onClick={cancelEdit}
+                  >
+                    Annuleren
+                  </button>
                 </>
               )}
-              <button type="button" className="ml-auto rounded-2xl border px-3 py-2 text-sm shadow-sm" onClick={resetForm}>Formulier leegmaken</button>
+              <button
+                type="button"
+                className="ml-auto rounded-2xl border px-3 py-2 text-sm shadow-sm"
+                onClick={resetForm}
+              >
+                Formulier leegmaken
+              </button>
             </div>
           </form>
         </section>
@@ -757,15 +997,33 @@ export default function App() {
         {/* Filters/Sortering */}
         <section className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex gap-2">
-            <input className="w-64 rounded-xl border px-3 py-2" placeholder="Zoek op adres, plaats, makelaar..." value={filter} onChange={(e) => setFilter(e.target.value)} />
-            <select className="rounded-xl border px-3 py-2" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+            <input
+              className="w-64 rounded-xl border px-3 py-2"
+              placeholder="Zoek op adres, plaats, makelaar..."
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+            />
+            <select
+              className="rounded-xl border px-3 py-2"
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+            >
               <option value="">Alle statussen</option>
-              {STATUS_OPTIONS.map((o) => (<option key={o.value} value={o.value}>{o.label}</option>))}
+              {STATUS_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
             </select>
           </div>
           <div className="flex gap-2">
-            <label className="text-sm">Sorteren:
-              <select className="ml-2 rounded-xl border px-3 py-2" value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
+            <label className="text-sm">
+              Sorteren:
+              <select
+                className="ml-2 rounded-xl border px-3 py-2"
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+              >
                 <option value="createdDesc">Nieuwste eerst</option>
                 <option value="cityAsc">Plaats A→Z</option>
                 <option value="statusAsc">Status A→Z</option>
@@ -778,7 +1036,11 @@ export default function App() {
 
         {/* Lijst */}
         <section className="space-y-3">
-          {visible.length === 0 && (<div className="rounded-2xl border bg-white p-6 text-center text-slate-600">Nog geen woningen opgeslagen.</div>)}
+          {visible.length === 0 && (
+            <div className="rounded-2xl border bg-white p-6 text-center text-slate-600">
+              Nog geen woningen opgeslagen.
+            </div>
+          )}
           {visible.map((it, idx) => (
             <article key={it.id} className="rounded-2xl border bg-white p-4 shadow-sm">
               <div className="flex flex-col gap-3">
@@ -786,50 +1048,122 @@ export default function App() {
                   <div className="grow">
                     <div className="flex flex-wrap items-center gap-2">
                       <h3 className="text-lg font-semibold">{it.title || "(Geen titel)"}</h3>
-                      <span className={badgeClass(it.status)}>{STATUS_OPTIONS.find((s) => s.value === it.status)?.label || it.status}</span>
-                      {Number(it.price) > 0 && (<span className="ml-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">{formatEUR(it.price)}</span>)}
-                      {it.url && <LinkChip url={it.url} />}
+                      <span className={badgeClass(it.status)}>
+                        {STATUS_OPTIONS.find((s) => s.value === it.status)?.label || it.status}
+                      </span>
+                      {Number(it.price) > 0 && (
+                        <span className="ml-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
+                          {formatEUR(it.price)}
+                        </span>
+                      )}
                       {averageRating(it.ratings) > 0 && (
-                        <span className="ml-2 rounded-full bg-yellow-50 px-2 py-0.5 text-xs font-medium text-amber-700">⭐ {averageRating(it.ratings)}/5</span>
+                        <span className="ml-2 rounded-full bg-yellow-50 px-2 py-0.5 text-xs font-medium text-amber-700">
+                          ⭐ {averageRating(it.ratings)}/5
+                        </span>
                       )}
                     </div>
-                    <p className="text-sm text-slate-700">{it.address && <span>{it.address}, </span>}{[it.postalCode, it.city].filter(Boolean).join(" ")} {it.country ? `, ${it.country}` : ""}</p>
-                    {it.agencyName && <p className="text-xs text-slate-600">Makelaardij: {it.agencyName}</p>}
+                    <p className="text-sm text-slate-700">
+                      {it.address && <span>{it.address}, </span>}
+                      {[it.postalCode, it.city].filter(Boolean).join(" ")}
+                      {it.country ? `, ${it.country}` : ""}
+                    </p>
+                    {it.agencyName && (
+                      <p className="text-xs text-slate-600">Makelaardij: {it.agencyName}</p>
+                    )}
                     {(it.agentName || it.agentPhone || it.agentEmail) && (
-                      <p className="text-xs text-slate-600">Makelaar: {[it.agentName, it.agentPhone, it.agentEmail].filter(Boolean).join(" · ")}</p>
+                      <p className="text-xs text-slate-600">
+                        Makelaar: {[it.agentName, it.agentPhone, it.agentEmail].filter(Boolean).join(" · ")}
+                      </p>
                     )}
 
                     {/* Inline wijzigen: status + datum/tijd */}
                     <div className="mt-2 flex flex-wrap items-center gap-2">
                       <label className="text-xs text-slate-600">Status</label>
-                      <select className="rounded-lg border px-2 py-1 text-xs" value={it.status} onChange={(e) => updateItem(it.id, { status: e.target.value })}>
-                        {STATUS_OPTIONS.map((o) => (<option key={o.value} value={o.value}>{o.label}</option>))}
+                      <select
+                        className="rounded-lg border px-2 py-1 text-xs"
+                        value={it.status}
+                        onChange={(e) => updateItem(it.id, { status: e.target.value })}
+                      >
+                        {STATUS_OPTIONS.map((o) => (
+                          <option key={o.value} value={o.value}>
+                            {o.label}
+                          </option>
+                        ))}
                       </select>
 
                       <label className="ml-2 text-xs text-slate-600">Bezichtiging</label>
-                      <input type="datetime-local" className="rounded-lg border px-2 py-1 text-xs" value={it.viewingAt || ""} onChange={(e) => updateItem(it.id, { viewingAt: e.target.value })} />
-                      {it.viewingAt && <span className="text-xs text-slate-600">({formatViewing(it.viewingAt)})</span>}
+                      <input
+                        type="datetime-local"
+                        className="rounded-lg border px-2 py-1 text-xs"
+                        value={it.viewingAt || ""}
+                        onChange={(e) => updateItem(it.id, { viewingAt: e.target.value })}
+                      />
+                      {it.viewingAt && (
+                        <span className="text-xs text-slate-600">({formatViewing(it.viewingAt)})</span>
+                      )}
                     </div>
 
                     {/* Beoordelingen */}
                     <div className="mt-3 rounded-xl border bg-slate-50 p-3">
                       <div className="mb-2 flex items-center justify-between">
                         <h4 className="text-sm font-semibold">Beoordeling</h4>
-                        <span className="text-xs text-slate-600">Gemiddelde: {averageRating(it.ratings) || "–"}/5</span>
+                        <span className="text-xs text-slate-600">
+                          Gemiddelde: {averageRating(it.ratings) || "–"}/5
+                        </span>
                       </div>
                       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                        <StarRating value={it.ratings?.overall || 0} onChange={(v) => updateRating(it.id, "overall", v)} label="Algehele indruk" />
-                        <StarRating value={it.ratings?.location || 0} onChange={(v) => updateRating(it.id, "location", v)} label="Locatie / Ligging" />
-                        <StarRating value={it.ratings?.accessibility || 0} onChange={(v) => updateRating(it.id, "accessibility", v)} label="Bereikbaarheid" />
-                        <StarRating value={it.ratings?.business || 0} onChange={(v) => updateRating(it.id, "business", v)} label="Bedrijfspotentieel" />
-                        <StarRating value={it.ratings?.renovation || 0} onChange={(v) => updateRating(it.id, "renovation", v)} label="Benodigd verbouwingsbudget" hint="5 = weinig budget nodig" />
-                        <StarRating value={it.ratings?.parking || 0} onChange={(v) => updateRating(it.id, "parking", v)} label="Parkeergelegenheid" />
-                        <StarRating value={it.ratings?.pool || 0} onChange={(v) => updateRating(it.id, "pool", v)} label="Zwembad" />
-                        <StarRating value={it.ratings?.privateAreas || 0} onChange={(v) => updateRating(it.id, "privateAreas", v)} label="Privévertrekken" />
-                        <StarRating value={it.ratings?.feasibility || 0} onChange={(v) => updateRating(it.id, "feasibility", v)} label="Realiseerbaarheid" />
+                        <StarRating
+                          value={it.ratings?.overall || 0}
+                          onChange={(v) => updateRating(it.id, "overall", v)}
+                          label="Algehele indruk"
+                        />
+                        <StarRating
+                          value={it.ratings?.location || 0}
+                          onChange={(v) => updateRating(it.id, "location", v)}
+                          label="Locatie / Ligging"
+                        />
+                        <StarRating
+                          value={it.ratings?.accessibility || 0}
+                          onChange={(v) => updateRating(it.id, "accessibility", v)}
+                          label="Bereikbaarheid"
+                        />
+                        <StarRating
+                          value={it.ratings?.business || 0}
+                          onChange={(v) => updateRating(it.id, "business", v)}
+                          label="Bedrijfspotentieel"
+                        />
+                        <StarRating
+                          value={it.ratings?.renovation || 0}
+                          onChange={(v) => updateRating(it.id, "renovation", v)}
+                          label="Benodigd verbouwingsbudget"
+                          hint="5 = weinig budget nodig"
+                        />
+                        <StarRating
+                          value={it.ratings?.parking || 0}
+                          onChange={(v) => updateRating(it.id, "parking", v)}
+                          label="Parkeergelegenheid"
+                        />
+                        <StarRating
+                          value={it.ratings?.pool || 0}
+                          onChange={(v) => updateRating(it.id, "pool", v)}
+                          label="Zwembad"
+                        />
+                        <StarRating
+                          value={it.ratings?.privateAreas || 0}
+                          onChange={(v) => updateRating(it.id, "privateAreas", v)}
+                          label="Privévertrekken"
+                        />
+                        <StarRating
+                          value={it.ratings?.feasibility || 0}
+                          onChange={(v) => updateRating(it.id, "feasibility", v)}
+                          label="Realiseerbaarheid"
+                        />
                       </div>
                       {it.status !== "bezichtigd" && (
-                        <p className="mt-2 text-xs text-slate-500">Tip: markeer de status als <em>Bezichtigd</em> zodra je de beoordeling definitief maakt.</p>
+                        <p className="mt-2 text-xs text-slate-500">
+                          Tip: markeer de status als <em>Bezichtigd</em> zodra je de beoordeling definitief
+                          maakt.
+                        </p>
                       )}
                     </div>
 
@@ -837,16 +1171,53 @@ export default function App() {
                   </div>
 
                   <div className="flex flex-wrap items-start gap-2">
-                    <a href={buildGoogleMapsUrl(it)} target="_blank" rel="noopener noreferrer" className="rounded-xl border px-3 py-2 text-sm shadow-sm hover:bg-slate-50">Google Maps</a>
-                    <a href={buildOsmUrl(it)} target="_blank" rel="noopener noreferrer" className="rounded-xl border px-3 py-2 text-sm shadow-sm hover:bg-slate-50">OpenStreetMap</a>
-                    <button onClick={() => startEdit(it)} className="rounded-xl border px-3 py-2 text-sm shadow-sm hover:bg-slate-50">Bewerken</button>
-                    <button onClick={() => remove(it.id)} className="rounded-xl border px-3 py-2 text-sm shadow-sm hover:bg-rose-50">Verwijderen</button>
-                    <button onClick={() => move(it.id, "up")} disabled={idx === 0} className="rounded-xl border px-3 py-2 text-sm shadow-sm disabled:opacity-40">↑</button>
-                    <button onClick={() => move(it.id, "down")} disabled={idx === visible.length - 1} className="rounded-xl border px-3 py-2 text-sm shadow-sm disabled:opacity-40">↓</button>
+                    <a
+                      href={buildGoogleMapsUrl(it)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="rounded-xl border px-3 py-2 text-sm shadow-sm hover:bg-slate-50"
+                    >
+                      Google Maps
+                    </a>
+                    <a
+                      href={buildOsmUrl(it)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="rounded-xl border px-3 py-2 text-sm shadow-sm hover:bg-slate-50"
+                    >
+                      OpenStreetMap
+                    </a>
+                    <button
+                      onClick={() => startEdit(it)}
+                      className="rounded-xl border px-3 py-2 text-sm shadow-sm hover:bg-slate-50"
+                    >
+                      Bewerken
+                    </button>
+                    <button
+                      onClick={() => remove(it.id)}
+                      className="rounded-xl border px-3 py-2 text-sm shadow-sm hover:bg-rose-50"
+                    >
+                      Verwijderen
+                    </button>
+                    <button
+                      onClick={() => move(it.id, "up")}
+                      disabled={idx === 0}
+                      className="rounded-xl border px-3 py-2 text-sm shadow-sm disabled:opacity-40"
+                    >
+                      ↑
+                    </button>
+                    <button
+                      onClick={() => move(it.id, "down")}
+                      disabled={idx === visible.length - 1}
+                      className="rounded-xl border px-3 py-2 text-sm shadow-sm disabled:opacity-40"
+                    >
+                      ↓
+                    </button>
                   </div>
                 </div>
 
-                {it.url && <LinkPreview url={it.url} />}
+                {/* Rijke link preview (compacte valt weg) */}
+                {it.url && <SmartLinkPreview url={it.url} />}
               </div>
             </article>
           ))}
@@ -854,9 +1225,35 @@ export default function App() {
 
         <footer className="mt-10 space-y-1 text-center text-xs text-slate-500">
           <p>Realtime via Firestore. Zonder board werk je lokaal (alleen dit apparaat).</p>
-          <p>Vergeet niet je Firebase config te vullen en je Vercel-domein toe te voegen bij Authorized domains. · Build: Firestore Sync v1</p>
+          <p>
+            Vergeet niet je Firebase config te vullen en je Vercel-domein toe te voegen bij Authorized
+            domains. · Build: Firestore Sync v1 (met prijs & rich link preview)
+          </p>
         </footer>
       </div>
     </div>
   );
+}
+
+// Maps helpers
+function buildGoogleMapsUrl(item) {
+  const hasCoords = item.lat && item.lng;
+  if (hasCoords) {
+    return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${item.lat},${item.lng}`)}`;
+  }
+  const q = [item.address, item.postalCode, item.city, item.country]
+    .filter(Boolean)
+    .join(", ");
+  return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(q)}`;
+}
+
+function buildOsmUrl(item) {
+  if (item.lat && item.lng) {
+    const coords = `;${item.lat},${item.lng}`;
+    return `https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=${encodeURIComponent(coords)}`;
+  }
+  const q = [item.address, item.postalCode, item.city, item.country]
+    .filter(Boolean)
+    .join(", ");
+  return `https://www.openstreetmap.org/search?query=${encodeURIComponent(q)}`;
 }
