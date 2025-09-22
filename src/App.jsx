@@ -217,6 +217,25 @@ function LinkPreview({ url }) {
   );
 }
 
+function LinkChip({ url }) {
+  if (!url) return null;
+  const parts = getUrlParts(url);
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="inline-flex max-w-[180px] items-center gap-1 rounded-full border px-2 py-0.5 text-xs hover:bg-slate-50"
+      title={url}
+    >
+      <span className="flex h-4 w-4 items-center justify-center rounded-full bg-slate-200 text-[10px] font-bold text-slate-700">
+        {hostInitial(parts.host)}
+      </span>
+      <span className="truncate">{parts.host}</span>
+    </a>
+  );
+}
+
 function StarRating({ value = 0, onChange, size = "md", label, hint }) {
   const stars = [1, 2, 3, 4, 5];
   const cls = size === "sm" ? "text-sm" : size === "lg" ? "text-xl" : "text-base";
@@ -769,6 +788,7 @@ export default function App() {
                       <h3 className="text-lg font-semibold">{it.title || "(Geen titel)"}</h3>
                       <span className={badgeClass(it.status)}>{STATUS_OPTIONS.find((s) => s.value === it.status)?.label || it.status}</span>
                       {Number(it.price) > 0 && (<span className="ml-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">{formatEUR(it.price)}</span>)}
+                      {it.url && <LinkChip url={it.url} />}
                       {averageRating(it.ratings) > 0 && (
                         <span className="ml-2 rounded-full bg-yellow-50 px-2 py-0.5 text-xs font-medium text-amber-700">⭐ {averageRating(it.ratings)}/5</span>
                       )}
