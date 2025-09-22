@@ -145,7 +145,6 @@ function emptyForm() {
     status: "",
     viewingAt: "",
     notes: "",
-    price: 0,
     ratings: defaultRatings(),
     order: Date.now(),
   };
@@ -251,13 +250,6 @@ function averageRating(ratings) {
   const vals = Object.values(ratings).filter((v) => Number(v) > 0);
   if (vals.length === 0) return 0;
   return Math.round((vals.reduce((a, b) => a + Number(b), 0) / vals.length) * 10) / 10;
-}
-
-function formatEUR(value){
-  try{
-    if(value==null || value === "" || isNaN(Number(value))) return "";
-    return new Intl.NumberFormat('nl-NL',{style:'currency',currency:'EUR',maximumFractionDigits:0}).format(Number(value));
-  }catch{ return `€ ${Number(value||0).toLocaleString('nl-NL')}` }
 }
 
 function TopStatusBar({ boardId, liveStatus }) {
@@ -545,7 +537,7 @@ export default function App() {
     if (filter.trim()) {
       const q = filter.toLowerCase();
       v = v.filter((it) =>
-        [it.title, it.address, it.city, it.postalCode, it.country, it.agencyName, it.agentName, it.agentEmail, it.agentPhone, it.notes, it.price != null ? String(it.price) : ""]
+        [it.title, it.address, it.city, it.postalCode, it.country, it.agencyName, it.agentName, it.agentEmail, it.agentPhone, it.notes]
           .filter(Boolean)
           .join(" ")
           .toLowerCase()
@@ -556,8 +548,6 @@ export default function App() {
     if (sortBy === "createdDesc") v.sort((a, b) => (b.order || 0) - (a.order || 0));
     if (sortBy === "cityAsc") v.sort((a, b) => (a.city || "").localeCompare(b.city || ""));
     if (sortBy === "statusAsc") v.sort((a, b) => (a.status || "").localeCompare(b.status || ""));
-    if (sortBy === "priceAsc") v.sort((a,b)=> (Number(a.price)||0) - (Number(b.price)||0));
-    if (sortBy === "priceDesc") v.sort((a,b)=> (Number(b.price)||0) - (Number(a.price)||0));
     return v;
   }, [items, filter, statusFilter, sortBy]);
 
@@ -637,25 +627,19 @@ export default function App() {
           <form onSubmit={isEditing ? (e) => { e.preventDefault(); saveEdit(); } : handleSubmit} className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div>
               <label className="text-sm font-medium">Titel / Naam woning<span className="text-rose-600">*</span></label>
-              <input className={`${"mt-1 w-full rounded-xl border px-3 py-2"} ${errors.title ? "border-rose-400" : ""}`} placeholder="Bijv. Charmehuisje bij Dijon" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
+              <input className={`mt-1 w-full rounded-xl border px-3 py-2 ${errors.title ? "border-rose-400" : ""}`} placeholder="Bijv. Charmehuisje bij Dijon" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
               {errors.title && <p className="text-xs text-rose-600">{errors.title}</p>}
             </div>
             <div>
               <label className="text-sm font-medium">Link naar woning<span className="text-rose-600">*</span></label>
-              <input className={`${"mt-1 w-full rounded-xl border px-3 py-2"} ${errors.url ? "border-rose-400" : ""}`} placeholder="https://..." value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} />
+              <input className={`mt-1 w-full rounded-xl border px-3 py-2 ${errors.url ? "border-rose-400" : ""}`} placeholder="https://..." value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} />
               {errors.url && <p className="text-xs text-rose-600">{errors.url}</p>}
-            </div>
-
-            <div>
-              <label className="text-sm font-medium">Prijs (EUR)</label>
-              <input type="number" inputMode="decimal" className="mt-1 w-full rounded-xl border px-3 py-2" placeholder="350000" value={form.price ?? ''} onChange={(e)=> setForm({...form, price: e.target.value === '' ? '' : Number(e.target.value)})} />
-              <p className="text-xs text-slate-500 mt-1">Vul een bedrag in zonder punten of €-teken, bijv. 350000.</p>
             </div>
 
             <div className="md:col-span-2 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <div>
                 <label className="text-sm font-medium">Adres<span className="text-rose-600">*</span></label>
-                <input className={`${"mt-1 w-full rounded-xl border px-3 py-2"} ${errors.address ? "border-rose-400" : ""}`} placeholder="Rue de ... 12" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
+                <input className={`mt-1 w-full rounded-xl border px-3 py-2 ${errors.address ? "border-rose-400" : ""}`} placeholder="Rue de ... 12" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
                 {errors.address && <p className="text-xs text-rose-600">{errors.address}</p>}
               </div>
               <div>
@@ -664,7 +648,7 @@ export default function App() {
               </div>
               <div>
                 <label className="text-sm font-medium">Plaats<span className="text-rose-600">*</span></label>
-                <input className={`${"mt-1 w-full rounded-xl border px-3 py-2"} ${errors.city ? "border-rose-400" : ""}`} placeholder="Paris" value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} />
+                <input className={`mt-1 w-full rounded-xl border px-3 py-2 ${errors.city ? "border-rose-400" : ""}`} placeholder="Paris" value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} />
                 {errors.city && <p className="text-xs text-rose-600">{errors.city}</p>}
               </div>
               <div>
@@ -710,7 +694,7 @@ export default function App() {
 
             <div>
               <label className="text-sm font-medium">Status<span className="text-rose-600">*</span></label>
-              <select className={`${"mt-1 w-full rounded-xl border px-3 py-2"} ${errors.status ? "border-rose-400" : ""}`} value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
+              <select className={`mt-1 w-full rounded-xl border px-3 py-2 ${errors.status ? "border-rose-400" : ""}`} value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
                 <option value="">— Kies status —</option>
                 {STATUS_OPTIONS.map((opt) => (<option key={opt.value} value={opt.value}>{opt.label}</option>))}
               </select>
@@ -750,8 +734,6 @@ export default function App() {
                 <option value="createdDesc">Nieuwste eerst</option>
                 <option value="cityAsc">Plaats A→Z</option>
                 <option value="statusAsc">Status A→Z</option>
-                <option value="priceAsc">Prijs laag → hoog</option>
-                <option value="priceDesc">Prijs hoog → laag</option>
               </select>
             </label>
           </div>
@@ -768,7 +750,6 @@ export default function App() {
                     <div className="flex flex-wrap items-center gap-2">
                       <h3 className="text-lg font-semibold">{it.title || "(Geen titel)"}</h3>
                       <span className={badgeClass(it.status)}>{STATUS_OPTIONS.find((s) => s.value === it.status)?.label || it.status}</span>
-                      {Number(it.price) > 0 && (<span className="ml-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">{formatEUR(it.price)}</span>)}
                       {averageRating(it.ratings) > 0 && (
                         <span className="ml-2 rounded-full bg-yellow-50 px-2 py-0.5 text-xs font-medium text-amber-700">⭐ {averageRating(it.ratings)}/5</span>
                       )}
