@@ -665,6 +665,7 @@ export default function App() {
               <button type="button" className="ml-auto rounded-2xl border px-3 py-2 text-sm shadow-sm" onClick={resetForm}>Formulier leegmaken</button>
             </div>
           </form>
+        </section>
 
         {/* Filters/Sortering */}
         <section className={`${activeTab==='all' ? '' : 'hidden'} mb-3`}>
@@ -721,9 +722,6 @@ export default function App() {
                       {Number(it.price) > 0 && (
                         <span className="ml-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">{formatEUR(it.price)}</span>
                       )}
-                      {activeTab==='reviews' && averageRating(it.ratings) > 0 && (
-                        <span className="ml-2 rounded-full bg-yellow-50 px-2 py-0.5 text-xs font-medium text-amber-700">⭐ {averageRating(it.ratings)}/5</span>
-                      )}
                     </div>
                     <p className="text-sm text-slate-700">
                       {it.address && <span>{it.address}, </span>}
@@ -747,21 +745,6 @@ export default function App() {
                       {it.viewingAt && (<span className="text-xs text-slate-600">({formatViewing(it.viewingAt)})</span>)}
                     </div>
 
-                    {/* Beoordelingen */}
-                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                      <StarRating value={it.ratings?.overall || 0} onChange={(v) => updateRating(it.id, "overall", v)} label="Algehele indruk" />
-                      <StarRating value={it.ratings?.location || 0} onChange={(v) => updateRating(it.id, "location", v)} label="Locatie / Ligging" />
-                      <StarRating value={it.ratings?.accessibility || 0} onChange={(v) => updateRating(it.id, "accessibility", v)} label="Bereikbaarheid" />
-                      <StarRating value={it.ratings?.business || 0} onChange={(v) => updateRating(it.id, "business", v)} label="Bedrijfspotentieel" />
-                      <StarRating value={it.ratings?.renovation || 0} onChange={(v) => updateRating(it.id, "renovation", v)} label="Benodigd verbouwingsbudget" hint="5 = weinig budget nodig" />
-                      <StarRating value={it.ratings?.parking || 0} onChange={(v) => updateRating(it.id, "parking", v)} label="Parkeergelegenheid" />
-                      <StarRating value={it.ratings?.pool || 0} onChange={(v) => updateRating(it.id, "pool", v)} label="Zwembad" />
-                      <StarRating value={it.ratings?.privateAreas || 0} onChange={(v) => updateRating(it.id, "privateAreas", v)} label="Privévertrekken" />
-                      <StarRating value={it.ratings?.feasibility || 0} onChange={(v) => updateRating(it.id, "feasibility", v)} label="Realiseerbaarheid" />
-                    </div>
-                    {it.status !== "bezichtigd" && (
-                      <p className="mt-2 text-xs text-slate-500">Tip: markeer de status als <em>Bezichtigd</em> zodra je de beoordeling definitief maakt.</p>
-                    )}
                     {it.notes && <p className="mt-2 text-sm text-slate-600">🗒️ {it.notes}</p>}
                   </div>
 
@@ -780,7 +763,6 @@ export default function App() {
               </div>
             </article>
           ))}
-        </section>
         </section>
 
         {/* Ingeplande bezichtigingen */}
