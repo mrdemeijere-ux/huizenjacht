@@ -210,7 +210,6 @@ function SmartLinkPreview({ url }) {
         if (data && (data.title || data.image || data.description)) {
           setMeta(data);
         } else {
-          // Geen bruikbare OG-tags → fallback
           setMeta(null);
         }
       })
@@ -227,7 +226,6 @@ function SmartLinkPreview({ url }) {
 
   if (!endpoint || !url) return null; // endpoint niet geconfigureerd → sla over
 
-  // Volwaardige kaart
   if (meta) {
     return (
       <a
@@ -254,7 +252,6 @@ function SmartLinkPreview({ url }) {
     );
   }
 
-  // Skeleton tijdens laden
   if (loading) {
     return (
       <div className="flex items-center gap-3 rounded-xl border bg-slate-50 px-3 py-2 animate-pulse">
@@ -267,7 +264,6 @@ function SmartLinkPreview({ url }) {
     );
   }
 
-  // Fallback-kaartje wanneer OG-meta ontbreekt of request faalt
   return (
     <a
       href={url}
@@ -349,6 +345,7 @@ export default function App() {
   const [statusFilter, setStatusFilter] = useState("");
   const [sortBy, setSortBy] = useState("createdDesc");
   const [errors, setErrors] = useState({});
+  const [activeTab, setActiveTab] = useState("all");
 
   const [user, setUser] = useState(null);
   const boardId = "global"; // vaste opslaglocatie
@@ -412,6 +409,7 @@ export default function App() {
     try {
       await addDoc(collection(db, "boards", boardId, "items"), withMeta);
       resetForm();
+      setActiveTab("all");
     } catch (err) {
       alert("Opslaan in Firestore mislukt: " + (err?.message || String(err)));
     }
@@ -420,6 +418,7 @@ export default function App() {
   function startEdit(it) {
     setEditingId(it.id);
     setForm({ ...it });
+    setActiveTab("new");
   }
 
   async function saveEdit() {
@@ -432,6 +431,7 @@ export default function App() {
       await updateDoc(doc(db, "boards", boardId, "items", editingId), payload);
       setEditingId(null);
       resetForm();
+      setActiveTab("all");
     } catch (err) {
       alert("Bijwerken mislukt: " + (err?.message || String(err)));
     }
@@ -517,6 +517,13 @@ export default function App() {
     return v;
   }, [items, filter, statusFilter, sortBy]);
 
+  const scheduledVisible = useMemo(() => {
+    return items
+      .filter((it) => it.viewingAt)
+      .slice()
+      .sort((a, b) => new Date(a.viewingAt) - new Date(b.viewingAt));
+  }, [items]);
+
   const isEditing = Boolean(editingId);
 
   function formatViewing(dt) {
@@ -532,7 +539,7 @@ export default function App() {
 
   // ===================== Render =====================
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white text-slate-900">
+    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white text-slate-900 pb-24">
       <TopStatusBar liveStatus={liveStatus} />
       <div className="mx-auto max-w-6xl p-6">
         <header className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
@@ -552,7 +559,7 @@ export default function App() {
         )}
 
         {/* Formulier */}
-        <section className="mb-8 rounded-2xl border bg-white p-4 shadow-sm">
+        <section className={`mb-8 rounded-2xl border bg-white p-4 shadow-sm ${activeTab==='new' ? '' : 'hidden'}`}>
           <h2 className="mb-3 text-lg font-semibold">{isEditing ? "Woning bewerken" : "Nieuwe woning toevoegen"}</h2>
           <form onSubmit={isEditing ? (e) => { e.preventDefault(); saveEdit(); } : handleSubmit} className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div>
@@ -660,7 +667,7 @@ export default function App() {
         </section>
 
         {/* Filters/Sortering */}
-        <section className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <section className={`mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between ${activeTab==='all' ? '' : 'hidden'}`}>
           <div className="flex gap-2">
             <input className="w-64 rounded-xl border px-3 py-2" placeholder="Zoek op adres, plaats, makelaar..." value={filter} onChange={(e) => setFilter(e.target.value)} />
             <select className="rounded-xl border px-3 py-2" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
@@ -682,7 +689,7 @@ export default function App() {
         </section>
 
         {/* Lijst */}
-        <section className="space-y-3">
+        <section className={`space-y-3 ${activeTab==='all' ? '' : 'hidden'}`}>
           {visible.length === 0 && (
             <div className="rounded-2xl border bg-white p-6 text-center text-slate-600">Nog geen woningen opgeslagen.</div>
           )}
@@ -766,11 +773,71 @@ export default function App() {
           ))}
         </section>
 
+        {/* Ingeplande bezichtigingen */}
+        <section className={`${activeTab==='scheduled' ? '' : 'hidden'} space-y-3`}>
+          {scheduledVisible.length === 0 && (
+            <div className="rounded-2xl border bg-white p-6 text-center text-slate-600">Geen ingeplande bezichtigingen.</div>
+          )}
+          {scheduledVisible.map((it) => (
+            <article key={`sched-${it.id}`} className="rounded-2xl border bg-white p-4 shadow-sm">
+              <div className="flex flex-col gap-3">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="grow">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="text-lg font-semibold">{it.title || "(Geen titel)"}</h3>
+                      <span className={badgeClass(it.status)}>{STATUS_OPTIONS.find((s) => s.value === it.status)?.label || it.status}</span>
+                      {it.url && <LinkChip url={it.url} />}
+                      {Number(it.price) > 0 && (
+                        <span className="ml-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">{formatEUR(it.price)}</span>
+                      )}
+                    </div>
+                    {it.viewingAt && (
+                      <p className="mt-1 text-sm text-slate-700">📅 Bezichtiging: {formatViewing(it.viewingAt)}</p>
+                    )}
+                    <p className="text-sm text-slate-700">
+                      {it.address && <span>{it.address}, </span>}
+                      {[it.postalCode, it.city].filter(Boolean).join(" ")}
+                      {it.country ? `, ${it.country}` : ""}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-start gap-2">
+                    <a href={buildGoogleMapsUrl(it)} target="_blank" rel="noopener noreferrer" className="rounded-xl border px-3 py-2 text-sm shadow-sm hover:bg-slate-50">Google Maps</a>
+                    <a href={buildOsmUrl(it)} target="_blank" rel="noopener noreferrer" className="rounded-xl border px-3 py-2 text-sm shadow-sm hover:bg-slate-50">OpenStreetMap</a>
+                    <button onClick={() => startEdit(it)} className="rounded-xl border px-3 py-2 text-sm shadow-sm hover:bg-slate-50">Bewerken</button>
+                  </div>
+                </div>
+                {it.url && <SmartLinkPreview url={it.url} />}
+              </div>
+            </article>
+          ))}
+        </section>
+
         <footer className="mt-10 space-y-1 text-center text-xs text-slate-500">
           <p>Realtime via Firestore (altijd online opslag).</p>
-          <p>Build: Firestore Sync · prijs & rich link preview · LinkChip in kopregel.</p>
+          <p>Build: Firestore Sync · prijs & rich link preview · LinkChip in kopregel · tab bar onderin.</p>
         </footer>
       </div>
+
+      {/* Bottom Tab Bar */}
+      <nav className="fixed bottom-0 inset-x-0 border-t bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80">
+        <div className="mx-auto max-w-6xl px-4">
+          <div className="grid grid-cols-3 text-sm">
+            <button onClick={() => setActiveTab('new')} className={`flex flex-col items-center gap-1 py-3 ${activeTab==='new'?'text-slate-900 font-medium':'text-slate-500'}`}>
+              <span>➕</span>
+              <span>Nieuwe woning</span>
+            </button>
+            <button onClick={() => setActiveTab('all')} className={`flex flex-col items-center gap-1 py-3 ${activeTab==='all'?'text-slate-900 font-medium':'text-slate-500'}`}>
+              <span>📋</span>
+              <span>Alle woningen</span>
+            </button>
+            <button onClick={() => setActiveTab('scheduled')} className={`flex flex-col items-center gap-1 py-3 ${activeTab==='scheduled'?'text-slate-900 font-medium':'text-slate-500'}`}>
+              <span>📅</span>
+              <span>Ingepland</span>
+            </button>
+          </div>
+        </div>
+      </nav>
+
     </div>
   );
 }
