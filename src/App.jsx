@@ -291,9 +291,9 @@ function StarRating({ value = 0, onChange, size = "md", label, hint }) {
   const stars = [1, 2, 3, 4, 5];
   const cls = size === "sm" ? "text-sm" : size === "lg" ? "text-xl" : "text-base";
   return (
-    <div className="flex items-center gap-2">
-      {label && <span className="w-48 text-sm text-slate-700">{label}</span>}
-      <div className="flex items-center">
+    <div className="flex items-start gap-2 min-w-0">
+      {label && <span className="w-40 sm:w-56 md:w-64 shrink-0 text-sm text-slate-700 leading-snug">{label}</span>}
+      <div className="flex items-center flex-shrink-0">
         {stars.map((n) => (
           <button
             key={n}
@@ -752,7 +752,12 @@ export default function App() {
                     <div className="mt-3 rounded-xl border bg-slate-50 p-3">
                       <div className="mb-2 flex items-center justify-between">
                         <h4 className="text-sm font-semibold">Beoordeling</h4>
-                        <span className="text-xs text-slate-600">Gemiddelde: {averageRating(it.ratings) || "–"}/5</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-slate-600">Gemiddelde: {averageRating(it.ratings) || "–"}/5</span>
+                          <button type="button" onClick={() => resetRatings(it.id)} className="rounded-lg border px-2 py-1 text-xs hover:bg-white">
+                            Reset sterren
+                          </button>
+                        </div>
                       </div>
                       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                         <StarRating value={it.ratings?.overall || 0} onChange={(v) => updateRating(it.id, "overall", v)} label="Algehele indruk" />
@@ -858,6 +863,10 @@ export default function App() {
     </div>
   );
 }
+
+  async function resetRatings(id) {
+    await updateItem(id, { ratings: defaultRatings() });
+  }
 
 // Maps helpers
 function buildGoogleMapsUrl(item) {
