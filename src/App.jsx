@@ -630,7 +630,7 @@ export default function App() {
               </div>
               <div className="sm:col-span-2">
                 <label className="text-sm font-medium">Geplande bezichtiging (datum/tijd)</label>
-                <input type="datetime-local" className="mt-1 w-full rounded-xl border px-3 py-2" value={form.viewingAt} onChange={(e) => setForm({ ...form, viewingAt: e.target.value })} />
+                <input type="datetime-local" className="mt-1 w-full max-w-full min-w-0 appearance-none rounded-xl border px-3 py-2" value={form.viewingAt} onChange={(e) => setForm({ ...form, viewingAt: e.target.value })} />
                 <p className="mt-1 text-xs text-slate-500">Tip: dit gebruikt je lokale tijdzone.</p>
               </div>
             </div>
@@ -698,7 +698,7 @@ export default function App() {
               <div className="flex flex-col gap-3">
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                   <div className="grow">
-                    <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2 min-w-0">
                       <h3 className="text-lg font-semibold">{it.title || "(Geen titel)"}</h3>
                       <span className={badgeClass(it.status)}>{STATUS_OPTIONS.find((s) => s.value === it.status)?.label || it.status}</span>
                       {it.url && <LinkChip url={it.url} />}
@@ -720,14 +720,14 @@ export default function App() {
                     )}
 
                     {/* Inline wijzigen: status + datum/tijd */}
-                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <div className="mt-2 flex flex-wrap items-center gap-2 min-w-0">
                       <label className="text-xs text-slate-600">Status</label>
                       <select className="rounded-lg border px-2 py-1 text-xs" value={it.status} onChange={(e) => updateItem(it.id, { status: e.target.value })}>
                         {STATUS_OPTIONS.map((o) => (<option key={o.value} value={o.value}>{o.label}</option>))}
                       </select>
 
                       <label className="ml-2 text-xs text-slate-600">Bezichtiging</label>
-                      <input type="datetime-local" className="rounded-lg border px-2 py-1 text-xs" value={it.viewingAt || ""} onChange={(e) => updateItem(it.id, { viewingAt: e.target.value })} />
+                      <input type="datetime-local" className="rounded-lg border px-2 py-1 text-xs w-full sm:w-auto min-w-0 max-w-full appearance-none" value={it.viewingAt || ""} onChange={(e) => updateItem(it.id, { viewingAt: e.target.value })} />
                       {it.viewingAt && (<span className="text-xs text-slate-600">({formatViewing(it.viewingAt)})</span>)}
                     </div>
 
