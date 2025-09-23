@@ -665,7 +665,6 @@ export default function App() {
               <button type="button" className="ml-auto rounded-2xl border px-3 py-2 text-sm shadow-sm" onClick={resetForm}>Formulier leegmaken</button>
             </div>
           </form>
-        </section>
 
         {/* Filters/Sortering */}
         <section className={`${activeTab==='all' ? '' : 'hidden'} mb-3`}>
@@ -722,7 +721,7 @@ export default function App() {
                       {Number(it.price) > 0 && (
                         <span className="ml-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">{formatEUR(it.price)}</span>
                       )}
-                      {averageRating(it.ratings) > 0 && (
+                      {activeTab==='reviews' && averageRating(it.ratings) > 0 && (
                         <span className="ml-2 rounded-full bg-yellow-50 px-2 py-0.5 text-xs font-medium text-amber-700">⭐ {averageRating(it.ratings)}/5</span>
                       )}
                     </div>
@@ -782,6 +781,7 @@ export default function App() {
             </article>
           ))}
         </section>
+        </section>
 
         {/* Ingeplande bezichtigingen */}
         <section className={`${activeTab==='scheduled' ? '' : 'hidden'} space-y-3`}>
@@ -839,7 +839,7 @@ export default function App() {
                       {Number(it.price) > 0 && (
                         <span className="ml-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">{formatEUR(it.price)}</span>
                       )}
-                      {averageRating(it.ratings) > 0 && (
+                      {activeTab==='reviews' && averageRating(it.ratings) > 0 && (
                         <span className="ml-2 rounded-full bg-yellow-50 px-2 py-0.5 text-xs font-medium text-amber-700">⭐ {averageRating(it.ratings)}/5</span>
                       )}
                     </div>
