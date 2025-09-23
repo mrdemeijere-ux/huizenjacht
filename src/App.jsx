@@ -754,9 +754,29 @@ export default function App() {
                         <h4 className="text-sm font-semibold">Beoordeling</h4>
                         <div className="flex items-center gap-2">
                           <span className="text-xs text-slate-600">Gemiddelde: {averageRating(it.ratings) || "–"}/5</span>
-                          <button type="button" onClick={() => resetRatings(it.id)} className="rounded-lg border px-2 py-1 text-xs hover:bg-white">
-                            Reset sterren
-                          </button>
+                          <button
+                          type="button"
+                          onClick={async () => {
+                            try {
+                              await updateDoc(doc(db, "boards", boardId, "items", it.id), {
+                                "ratings.overall": 0,
+                                "ratings.location": 0,
+                                "ratings.accessibility": 0,
+                                "ratings.business": 0,
+                                "ratings.renovation": 0,
+                                "ratings.parking": 0,
+                                "ratings.pool": 0,
+                                "ratings.privateAreas": 0,
+                                "ratings.feasibility": 0,
+                              });
+                            } catch (err) {
+                              alert("Reset mislukt: " + (err?.message || String(err)));
+                            }
+                          }}
+                          className="rounded-lg border px-2 py-1 text-xs hover:bg-white"
+                        >
+                          Reset sterren
+                        </button>
                         </div>
                       </div>
                       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
