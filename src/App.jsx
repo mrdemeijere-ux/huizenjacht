@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from "react";
-
+// === CANONICAL: Huizenjacht - App — gebruik deze versie (laatst bijgewerkt: 2025-09-23) ===
+$0
 // Huizenjacht – single-file MVP (React + Tailwind + Firestore realtime sync)
 // Altijd online opslag (Firebase Firestore) – geen boards of lokale opslag
 // Features:
@@ -667,24 +667,40 @@ export default function App() {
         </section>
 
         {/* Filters/Sortering */}
-        <section className={`mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between ${activeTab==='all' ? '' : 'hidden'}`}>
-          <div className="flex gap-2">
-            <input className="w-64 rounded-xl border px-3 py-2" placeholder="Zoek op adres, plaats, makelaar..." value={filter} onChange={(e) => setFilter(e.target.value)} />
-            <select className="rounded-xl border px-3 py-2" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+        <section className={`${activeTab==='all' ? '' : 'hidden'} mb-3`}>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <input
+              className="w-full min-w-0 rounded-xl border px-3 py-2"
+              placeholder="Zoek op adres, plaats, makelaar..."
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+            />
+            <select
+              className="w-full min-w-0 rounded-xl border px-3 py-2"
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+            >
               <option value="">Alle statussen</option>
-              {STATUS_OPTIONS.map((o) => (<option key={o.value} value={o.value}>{o.label}</option>))}
+              {STATUS_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
             </select>
-          </div>
-          <div className="flex gap-2">
-            <label className="text-sm">Sorteren:
-              <select className="ml-2 rounded-xl border px-3 py-2" value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
+            <div className="w-full min-w-0">
+              <label className="sr-only">Sorteren</label>
+              <select
+                className="w-full rounded-xl border px-3 py-2"
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+              >
                 <option value="createdDesc">Nieuwste eerst</option>
                 <option value="cityAsc">Plaats A→Z</option>
                 <option value="statusAsc">Status A→Z</option>
                 <option value="priceAsc">Prijs laag → hoog</option>
                 <option value="priceDesc">Prijs hoog → laag</option>
               </select>
-            </label>
+            </div>
           </div>
         </section>
 
