@@ -749,52 +749,20 @@ export default function App() {
                     </div>
 
                     {/* Beoordelingen */}
-                    <div className="mt-3 rounded-xl border bg-slate-50 p-3">
-                      <div className="mb-2 flex items-center justify-between">
-                        <h4 className="text-sm font-semibold">Beoordeling</h4>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-slate-600">Gemiddelde: {averageRating(it.ratings) || "–"}/5</span>
-                          <button
-                          type="button"
-                          onClick={async () => {
-                            try {
-                              await updateDoc(doc(db, "boards", boardId, "items", it.id), {
-                                "ratings.overall": 0,
-                                "ratings.location": 0,
-                                "ratings.accessibility": 0,
-                                "ratings.business": 0,
-                                "ratings.renovation": 0,
-                                "ratings.parking": 0,
-                                "ratings.pool": 0,
-                                "ratings.privateAreas": 0,
-                                "ratings.feasibility": 0,
-                              });
-                            } catch (err) {
-                              alert("Reset mislukt: " + (err?.message || String(err)));
-                            }
-                          }}
-                          className="rounded-lg border px-2 py-1 text-xs hover:bg-white"
-                        >
-                          Reset sterren
-                        </button>
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                        <StarRating value={it.ratings?.overall || 0} onChange={(v) => updateRating(it.id, "overall", v)} label="Algehele indruk" />
-                        <StarRating value={it.ratings?.location || 0} onChange={(v) => updateRating(it.id, "location", v)} label="Locatie / Ligging" />
-                        <StarRating value={it.ratings?.accessibility || 0} onChange={(v) => updateRating(it.id, "accessibility", v)} label="Bereikbaarheid" />
-                        <StarRating value={it.ratings?.business || 0} onChange={(v) => updateRating(it.id, "business", v)} label="Bedrijfspotentieel" />
-                        <StarRating value={it.ratings?.renovation || 0} onChange={(v) => updateRating(it.id, "renovation", v)} label="Benodigd verbouwingsbudget" hint="5 = weinig budget nodig" />
-                        <StarRating value={it.ratings?.parking || 0} onChange={(v) => updateRating(it.id, "parking", v)} label="Parkeergelegenheid" />
-                        <StarRating value={it.ratings?.pool || 0} onChange={(v) => updateRating(it.id, "pool", v)} label="Zwembad" />
-                        <StarRating value={it.ratings?.privateAreas || 0} onChange={(v) => updateRating(it.id, "privateAreas", v)} label="Privévertrekken" />
-                        <StarRating value={it.ratings?.feasibility || 0} onChange={(v) => updateRating(it.id, "feasibility", v)} label="Realiseerbaarheid" />
-                      </div>
-                      {it.status !== "bezichtigd" && (
-                        <p className="mt-2 text-xs text-slate-500">Tip: markeer de status als <em>Bezichtigd</em> zodra je de beoordeling definitief maakt.</p>
-                      )}
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      <StarRating value={it.ratings?.overall || 0} onChange={(v) => updateRating(it.id, "overall", v)} label="Algehele indruk" />
+                      <StarRating value={it.ratings?.location || 0} onChange={(v) => updateRating(it.id, "location", v)} label="Locatie / Ligging" />
+                      <StarRating value={it.ratings?.accessibility || 0} onChange={(v) => updateRating(it.id, "accessibility", v)} label="Bereikbaarheid" />
+                      <StarRating value={it.ratings?.business || 0} onChange={(v) => updateRating(it.id, "business", v)} label="Bedrijfspotentieel" />
+                      <StarRating value={it.ratings?.renovation || 0} onChange={(v) => updateRating(it.id, "renovation", v)} label="Benodigd verbouwingsbudget" hint="5 = weinig budget nodig" />
+                      <StarRating value={it.ratings?.parking || 0} onChange={(v) => updateRating(it.id, "parking", v)} label="Parkeergelegenheid" />
+                      <StarRating value={it.ratings?.pool || 0} onChange={(v) => updateRating(it.id, "pool", v)} label="Zwembad" />
+                      <StarRating value={it.ratings?.privateAreas || 0} onChange={(v) => updateRating(it.id, "privateAreas", v)} label="Privévertrekken" />
+                      <StarRating value={it.ratings?.feasibility || 0} onChange={(v) => updateRating(it.id, "feasibility", v)} label="Realiseerbaarheid" />
                     </div>
-
+                    {it.status !== "bezichtigd" && (
+                      <p className="mt-2 text-xs text-slate-500">Tip: markeer de status als <em>Bezichtigd</em> zodra je de beoordeling definitief maakt.</p>
+                    )}
                     {it.notes && <p className="mt-2 text-sm text-slate-600">🗒️ {it.notes}</p>}
                   </div>
 
@@ -854,6 +822,87 @@ export default function App() {
           ))}
         </section>
 
+        {/* Reviews Tab */}
+        <section className={`${activeTab==='reviews' ? '' : 'hidden'} space-y-3`}>
+          {items.length === 0 && (
+            <div className="rounded-2xl border bg-white p-6 text-center text-slate-600">Nog geen woningen om te beoordelen.</div>
+          )}
+          {items.map((it) => (
+            <article key={`rev-${it.id}`} className="rounded-2xl border bg-white p-4 shadow-sm">
+              <div className="flex flex-col gap-3">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="grow">
+                    <div className="flex flex-wrap items-center gap-2 min-w-0">
+                      <h3 className="text-lg font-semibold">{it.title || "(Geen titel)"}</h3>
+                      <span className={badgeClass(it.status)}>{STATUS_OPTIONS.find((s) => s.value === it.status)?.label || it.status}</span>
+                      {it.url && <LinkChip url={it.url} />}
+                      {Number(it.price) > 0 && (
+                        <span className="ml-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">{formatEUR(it.price)}</span>
+                      )}
+                      {averageRating(it.ratings) > 0 && (
+                        <span className="ml-2 rounded-full bg-yellow-50 px-2 py-0.5 text-xs font-medium text-amber-700">⭐ {averageRating(it.ratings)}/5</span>
+                      )}
+                    </div>
+                    <p className="text-sm text-slate-700">
+                      {it.address && <span>{it.address}, </span>}
+                      {[it.postalCode, it.city].filter(Boolean).join(" ")}
+                      {it.country ? `, ${it.country}` : ""}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-start gap-2">
+                    <button onClick={() => startEdit(it)} className="rounded-xl border px-3 py-2 text-sm shadow-sm hover:bg-slate-50">Bewerken</button>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          await updateDoc(doc(db, "boards", boardId, "items", it.id), {
+                            "ratings.overall": 0,
+                            "ratings.location": 0,
+                            "ratings.accessibility": 0,
+                            "ratings.business": 0,
+                            "ratings.renovation": 0,
+                            "ratings.parking": 0,
+                            "ratings.pool": 0,
+                            "ratings.privateAreas": 0,
+                            "ratings.feasibility": 0,
+                          });
+                        } catch (err) {
+                          alert("Reset mislukt: " + (err?.message || String(err)));
+                        }
+                      }}
+                      className="rounded-xl border px-3 py-2 text-sm shadow-sm hover:bg-white"
+                    >
+                      Reset sterren
+                    </button>
+                  </div>
+                </div>
+
+                {/* Volledige beoordeling invullen */}
+                <div className="rounded-xl border bg-slate-50 p-3">
+                  <div className="mb-2 flex items-center justify-between">
+                    <h4 className="text-sm font-semibold">Beoordeling</h4>
+                    <span className="text-xs text-slate-600">Gemiddelde: {averageRating(it.ratings) || "–"}/5</span>
+                  </div>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    <StarRating value={it.ratings?.overall || 0} onChange={(v) => updateRating(it.id, "overall", v)} label="Algehele indruk" />
+                    <StarRating value={it.ratings?.location || 0} onChange={(v) => updateRating(it.id, "location", v)} label="Locatie / Ligging" />
+                    <StarRating value={it.ratings?.accessibility || 0} onChange={(v) => updateRating(it.id, "accessibility", v)} label="Bereikbaarheid" />
+                    <StarRating value={it.ratings?.business || 0} onChange={(v) => updateRating(it.id, "business", v)} label="Bedrijfspotentieel" />
+                    <StarRating value={it.ratings?.renovation || 0} onChange={(v) => updateRating(it.id, "renovation", v)} label="Benodigd verbouwingsbudget" hint="5 = weinig budget nodig" />
+                    <StarRating value={it.ratings?.parking || 0} onChange={(v) => updateRating(it.id, "parking", v)} label="Parkeergelegenheid" />
+                    <StarRating value={it.ratings?.pool || 0} onChange={(v) => updateRating(it.id, "pool", v)} label="Zwembad" />
+                    <StarRating value={it.ratings?.privateAreas || 0} onChange={(v) => updateRating(it.id, "privateAreas", v)} label="Privévertrekken" />
+                    <StarRating value={it.ratings?.feasibility || 0} onChange={(v) => updateRating(it.id, "feasibility", v)} label="Realiseerbaarheid" />
+                  </div>
+                  {it.status !== "bezichtigd" && (
+                    <p className="mt-2 text-xs text-slate-500">Tip: markeer de status als <em>Bezichtigd</em> zodra je de beoordeling definitief maakt.</p>
+                  )}
+                </div>
+              </div>
+            </article>
+          ))}
+        </section>
+
         <footer className="mt-10 space-y-1 text-center text-xs text-slate-500">
           <p>Realtime via Firestore (altijd online opslag).</p>
           <p>Build: Firestore Sync · prijs & rich link preview · LinkChip in kopregel · tab bar onderin.</p>
@@ -863,7 +912,7 @@ export default function App() {
       {/* Bottom Tab Bar */}
       <nav className="fixed bottom-0 inset-x-0 border-t bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80">
         <div className="mx-auto max-w-6xl px-4">
-          <div className="grid grid-cols-3 text-sm">
+          <div className="grid grid-cols-4 text-sm">
             <button onClick={() => setActiveTab('new')} className={`flex flex-col items-center gap-1 py-3 ${activeTab==='new'?'text-slate-900 font-medium':'text-slate-500'}`}>
               <span>➕</span>
               <span>Nieuwe woning</span>
@@ -875,6 +924,10 @@ export default function App() {
             <button onClick={() => setActiveTab('scheduled')} className={`flex flex-col items-center gap-1 py-3 ${activeTab==='scheduled'?'text-slate-900 font-medium':'text-slate-500'}`}>
               <span>📅</span>
               <span>Ingepland</span>
+            </button>
+            <button onClick={() => setActiveTab('reviews')} className={`flex flex-col items-center gap-1 py-3 ${activeTab==='reviews'?'text-slate-900 font-medium':'text-slate-500'}`}>
+              <span>⭐</span>
+              <span>Reviews</span>
             </button>
           </div>
         </div>
