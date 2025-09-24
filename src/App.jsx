@@ -750,9 +750,7 @@ export default function App() {
                     {it.notes && <p className="mt-2 text-sm text-slate-600">🗒️ {it.notes}</p>}
                   </div>
 
-                  <div className="flex flex-wrap items-start gap-2">
-                    <a href={buildGoogleMapsUrl(it)} target="_blank" rel="noopener noreferrer" className="rounded-xl border px-3 py-2 text-sm shadow-sm hover:bg-slate-50">Google Maps</a>
-                    <button onClick={() => openOsmApprox(it, updateItem)} className="rounded-xl border px-3 py-2 text-sm shadow-sm hover:bg-slate-50">OpenStreetMap</button>
+                  <div className="flex flex-wrap items-start gap-2"><button onClick={() => openOsmApprox(it, updateItem)} className="rounded-xl border px-3 py-2 text-sm shadow-sm hover:bg-slate-50"><span aria-hidden="true" className="mr-1">🗺️</span><span>Toon op OSM</span></button>
                     <button onClick={() => startEdit(it)} className="rounded-xl border px-3 py-2 text-sm shadow-sm hover:bg-slate-50">Bewerken</button>
                     <button onClick={() => remove(it.id)} className="rounded-xl border px-3 py-2 text-sm shadow-sm hover:bg-rose-50">Verwijderen</button>
                     <button onClick={() => move(it.id, "up")} disabled={idx === 0} className="rounded-xl border px-3 py-2 text-sm shadow-sm disabled:opacity-40">↑</button>
@@ -794,9 +792,7 @@ export default function App() {
                       {it.country ? `, ${it.country}` : ""}
                     </p>
                   </div>
-                  <div className="flex flex-wrap items-start gap-2">
-                    <a href={buildGoogleMapsUrl(it)} target="_blank" rel="noopener noreferrer" className="rounded-xl border px-3 py-2 text-sm shadow-sm hover:bg-slate-50">Google Maps</a>
-                    <button onClick={() => openOsmApprox(it, updateItem)} className="rounded-xl border px-3 py-2 text-sm shadow-sm hover:bg-slate-50">OpenStreetMap</button>
+                  <div className="flex flex-wrap items-start gap-2"><button onClick={() => openOsmApprox(it, updateItem)} className="rounded-xl border px-3 py-2 text-sm shadow-sm hover:bg-slate-50"><span aria-hidden="true" className="mr-1">🗺️</span><span>Toon op OSM</span></button>
                     <button onClick={() => startEdit(it)} className="rounded-xl border px-3 py-2 text-sm shadow-sm hover:bg-slate-50">Bewerken</button>
                   </div>
                 </div>
@@ -956,20 +952,3 @@ async function openOsmApprox(it, updateItem) {
   }
 }
 
-function buildGoogleMapsUrl(item) {
-  const hasCoords = item.lat && item.lng;
-  if (hasCoords) {
-    return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${item.lat},${item.lng}`)}`;
-  }
-  const q = [item.address, item.postalCode, item.city, item.country].filter(Boolean).join(", ");
-  return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(q)}`;
-}
-
-function buildOsmUrl(item) {
-  if (item.lat && item.lng) {
-    const coords = `;${item.lat},${item.lng}`;
-    return `https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=${encodeURIComponent(coords)}`;
-  }
-  const q = [item.address, item.postalCode, item.city, item.country].filter(Boolean).join(", ");
-  return `https://www.openstreetmap.org/search?query=${encodeURIComponent(q)}`;
-}
