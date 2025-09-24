@@ -1,4 +1,141 @@
-// /api/geocode.js  (Vercel serverless function)
+// /api/geocode.js — disambiguated FR geocoding for OSM
+// Strategie:
+// - Scrape listing-URL (optioneel) voor hints: postalCode, city, region/state, county
+// - Gebruik Nominatim structured search (city, postalcode, state, country)
+// - Filter resultaten op exacte postcode, anders op city/state/county, anders fallback
+// - countrycodes=fr, addressdetails=1, limit=5
+// - Optioneel ?debug=1 om candidates/tried te zien
+
+function normalize(s = "") {
+  return s
+    .toString()
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, ""); // strip diacritics
+}
+
+function pickAdminName(addr) {
+  // beste gok voor plaatsnaam in Nominatim-address object:
+  return addr?.city || addr?.town || addr?.village || addr?.municipality || addr?.hamlet || "";
+}
+
+async function fetchHtml(url) {
+  const r = await fetch(url, {
+    headers: {
+      "User-Agent": "Huizenjacht/1.0 (+support@example.com)",
+      "Accept-Language": "nl-NL,nl;q=0.9,fr;q=0.8,en;q=0.7",
+    },
+  });
+  if (!r.ok) throw new Error(`fetch ${r.status}`);
+  return await r.text();
+}
+
+function extractHintsFromHtml(html) {
+  const hints = {};
+
+  // JSON-LD geo
+  const latJson = html.match(/"latitude"\s*:\s*"(-?\d+(?:\.\d+)?)"/i)?.[1];
+  const lonJson = html.match(/"longitude"\s*:\s*"(-?\d+(?:\.\d+)?)"/i)?.[1];
+  if (latJson && lonJson) {
+    const lat = Number(latJson);
+    const lng = Number(lonJson);
+    if (isFinite(lat) && isFinite(lng)) return { lat, lng, direct: true };
+  }
+
+  // JSON-LD address bits
+  const postal = html.match(/"postalCode"\s*:\s*"(\d{4,6})"/i)?.[1];
+  const city = html.match(/"addressLocality"\s*:\s*"([^"]+)"/i)?.[1];
+  const state = html.match(/"addressRegion"\s*:\s*"([^"]+)"/i)?.[1]; // bv. Occitanie
+  const county = html.match(/"addressCounty"\s*:\s*"([^"]+)"/i)?.[1]; // niet altijd aanwezig
+
+  // Tekstpatroon: “Ville (12345)”
+  if (!postal || !city) {
+    const mCombo = html.match(/([A-ZÉÈÊÂÀÇÙa-zÀ-ÿ' -]+)\s*\((\d{4,6})\)/);
+    if (mCombo) {
+      if (!city) hints.city = mCombo[1];
+      if (!postal) hints.postalCode = mCombo[2];
+    }
+  }
+
+  if (postal) hints.postalCode = postal;
+  if (city) hints.city = city;
+  if (state) hints.state = state;
+  if (county) hints.county = county;
+
+  // extra heuristiek voor sites als IAD: pak een plaatsnaam uit URL-pad als fallback
+  const mTitle = html.match(/<title[^>]*>([^<]+)<\/title>/i)?.[1];
+  if (!hints.city && mTitle) {
+    // “maison … – Montferrand (11320) – IAD” → haal segment vóór “(12345)”
+    const mTitleCity = mTitle.match(/([A-ZÉÈÊÂÀÇÙa-zÀ-ÿ' -]+)\s*\(\d{4,6}\)/);
+    if (mTitleCity) hints.city = mTitleCity[1];
+  }
+
+  return hints;
+}
+
+async function nominatimStructured({ city, postalCode, state, county }) {
+  const u = new URL("https://nominatim.openstreetmap.org/search");
+  if (city) u.searchParams.set("city", city);
+  if (postalCode) u.searchParams.set("postalcode", postalCode);
+  if (state) u.searchParams.set("state", state);
+  if (county) u.searchParams.set("county", county);
+  u.searchParams.set("country", "France");
+  u.searchParams.set("countrycodes", "fr");
+  u.searchParams.set("format", "jsonv2");
+  u.searchParams.set("limit", "5");
+  u.searchParams.set("addressdetails", "1");
+  const r = await fetch(u, { headers: { "User-Agent": "Huizenjacht/1.0 (+support@example.com)" } });
+  if (!r.ok) return [];
+  return (await r.json()) || [];
+}
+
+async function nominatimFreeText(q) {
+  const u = new URL("https://nominatim.openstreetmap.org/search");
+  u.searchParams.set("q", q);
+  u.searchParams.set("countrycodes", "fr");
+  u.searchParams.set("format", "jsonv2");
+  u.searchParams.set("limit", "5");
+  u.searchParams.set("addressdetails", "1");
+  const r = await fetch(u, { headers: { "User-Agent": "Huizenjacht/1.0 (+support@example.com)" } });
+  if (!r.ok) return [];
+  return (await r.json()) || [];
+}
+
+function chooseBest(results, { postalCode, city, state, county }) {
+  if (!Array.isArray(results) || results.length === 0) return null;
+
+  // 1) exact postcode-match
+  if (postalCode) {
+    const exact = results.find((x) => x?.address?.postcode === postalCode);
+    if (exact) return exact;
+  }
+
+  // 2) city-naam (genormaliseerd)
+  if (city) {
+    const nc = normalize(city);
+    const byCity = results.find((x) => normalize(pickAdminName(x.address)) === nc);
+    if (byCity) return byCity;
+  }
+
+  // 3) state/region (Occitanie, etc.)
+  if (state) {
+    const ns = normalize(state);
+    const byState = results.find((x) => normalize(x?.address?.state || "") === ns);
+    if (byState) return byState;
+  }
+
+  // 4) county/département (Aude, etc.)
+  if (county) {
+    const nc = normalize(county);
+    const byCounty = results.find((x) => normalize(x?.address?.county || "") === nc);
+    if (byCounty) return byCounty;
+  }
+
+  // 5) fallback: eerste
+  return results[0];
+}
+
 export default async function handler(req, res) {
   try {
     const {
@@ -11,137 +148,104 @@ export default async function handler(req, res) {
     } = req.query || {};
 
     const tried = [];
+    let hints = {};
     let html = "";
-    let urlHints = {};
 
-    // ---------- 1) Verzamel hints uit de listing-URL ----------
+    // 0) Listing scrapen voor hints
     if (url) {
       try {
-        const r = await fetch(url, {
-          headers: {
-            "User-Agent": "Huizenjacht/1.0 (+support@example.com)",
-            "Accept-Language": "nl-NL,nl;q=0.9,fr;q=0.8,en;q=0.7",
-          },
-        });
-        html = await r.text();
-
-        // (a) JSON-LD: "geo": {"latitude": "...", "longitude": "..."}
-        const latJson = html.match(/"latitude"\s*:\s*"(-?\d+(?:\.\d+)?)"/i);
-        const lonJson = html.match(/"longitude"\s*:\s*"(-?\d+(?:\.\d+)?)"/i);
-        if (latJson && lonJson) {
-          const lat = Number(latJson[1]);
-          const lng = Number(lonJson[1]);
-          if (isFinite(lat) && isFinite(lng)) {
-            return res
-              .status(200)
-              .json({ lat, lng, source: "listing-geo", displayName: "from JSON-LD geo", q: null });
-          }
+        html = await fetchHtml(url);
+        const parsed = extractHintsFromHtml(html);
+        if (parsed?.direct) {
+          // JSON-LD had al coördinaten → klaar
+          return res.status(200).json({
+            lat: parsed.lat,
+            lng: parsed.lng,
+            source: "listing-geo",
+            displayName: "from JSON-LD geo",
+            q: null,
+          });
         }
-
-        // (b) JSON-LD: addressLocality / postalCode
-        const cityJson = html.match(/"addressLocality"\s*:\s*"([^"]+)"/i)?.[1];
-        const postJson = html.match(/"postalCode"\s*:\s*"(\d{4,6})"/i)?.[1];
-
-        // (c) Tekstpatroon: “Brusque (12360)”
-        const mCombo = html.match(/([A-ZÉÈÊÂÀÇÙa-zÀ-ÿ' -]+)\s*\((\d{4,6})\)/);
-
-        urlHints = {
-          city: cityJson || (mCombo ? mCombo[1] : undefined),
-          postalCode: postJson || (mCombo ? mCombo[2] : undefined),
-        };
-
-        // (d) URL-pad: neem bruikbare segmenten als fallback (bv. /brusque/...)
-        try {
-          const u = new URL(url);
-          const segs = u.pathname.split("/").filter(Boolean);
-          // heuristiek: pak laatste seg die op plaatsnaam lijkt
-          const locSeg = [...segs]
-            .reverse()
-            .find(
-              (s) =>
-                /^[a-zA-ZÀ-ÿ-]+$/.test(s) &&
-                !s.endsWith(".htm") &&
-                !["properties", "property", "nl", "fr", "en", "es"].includes(s.toLowerCase())
-            );
-          if (!urlHints.city && locSeg) {
-            urlHints.city = locSeg.replace(/-/g, " ");
-          }
-        } catch {}
+        hints = parsed;
       } catch {
-        // negeren; we blijven wel geocoden met wat we hebben
+        // negeer scraping-fout
       }
     }
 
-    // ---------- 2) Stel kandidaten samen ----------
-    const cand = [];
+    // Combineer input + hints
+    const want = {
+      city: city || hints.city || "",
+      postalCode: postalCode || hints.postalCode || "",
+      state: hints.state || "",
+      county: hints.county || "",
+    };
 
-    // Volledig adres als 1e poging
-    if (address || city || postalCode) {
-      cand.push([address, postalCode, city, country].filter(Boolean).join(" ").trim());
-    }
-
-    // URL-hints (stad + postcode + land)
-    if (urlHints.city || urlHints.postalCode) {
-      cand.push([urlHints.city, urlHints.postalCode, country].filter(Boolean).join(" ").trim());
-    }
-
-    // Alleen stad + land
-    if (city) cand.push([city, country].filter(Boolean).join(" ").trim());
-    if (urlHints.city) cand.push([urlHints.city, country].filter(Boolean).join(" ").trim());
-
-    // Alleen postcode + land
-    if (postalCode) cand.push([postalCode, country].filter(Boolean).join(" ").trim());
-    if (urlHints.postalCode) cand.push([urlHints.postalCode, country].filter(Boolean).join(" ").trim());
-
-    // Laatste redmiddel: alleen adres + land
-    if (address && !(city || postalCode)) cand.push([address, country].filter(Boolean).join(" ").trim());
-
-    // Filter/unique/zinvolle lengte
-    const seen = new Set();
-    const candidates = cand
-      .map((s) => s.replace(/\s+/g, " ").trim())
-      .filter((s) => s && s.length >= 3 && !seen.has(s) && seen.add(s));
-
-    // Als er helemaal niets is, geef fout
-    if (!candidates.length) {
-      return res.status(400).json({ error: "no_query", note: "Geen bruikbare zoekterm", urlHints, candidates });
-    }
-
-    // ---------- 3) Nominatim proberen, sequentieel ----------
-    for (const q of candidates) {
-      const u = new URL("https://nominatim.openstreetmap.org/search");
-      u.searchParams.set("q", q);
-      u.searchParams.set("format", "jsonv2");
-      u.searchParams.set("limit", "1");
-
-      tried.push(q);
-
-      const geo = await fetch(u, {
-        headers: { "User-Agent": "Huizenjacht/1.0 (+support@example.com)" },
+    // 1) Structured met zo veel mogelijk signalen
+    const pass1 = await nominatimStructured(want);
+    tried.push({ type: "structured", want, got: pass1.length });
+    let best = chooseBest(pass1, want);
+    if (best) {
+      return res.status(200).json({
+        lat: Number(best.lat),
+        lng: Number(best.lon),
+        displayName: best.display_name,
+        bbox: best.boundingbox,
+        q: want,
+        source: "nominatim-structured",
+        ...(debug === "1" ? { tried, hints } : {}),
       });
-      if (!geo.ok) continue;
+    }
 
-      const data = await geo.json().catch(() => null);
-      if (Array.isArray(data) && data[0] && data[0].lat && data[0].lon) {
-        const { lat, lon, display_name, boundingbox } = data[0];
-        res.setHeader("Cache-Control", "s-maxage=86400, stale-while-revalidate=86400");
+    // 2) Structured zonder state/county
+    const pass2 = await nominatimStructured({ city: want.city, postalCode: want.postalCode });
+    tried.push({ type: "structured-lite", want: { city: want.city, postalCode: want.postalCode }, got: pass2.length });
+    best = chooseBest(pass2, want);
+    if (best) {
+      return res.status(200).json({
+        lat: Number(best.lat),
+        lng: Number(best.lon),
+        displayName: best.display_name,
+        bbox: best.boundingbox,
+        q: { city: want.city, postalCode: want.postalCode },
+        source: "nominatim-structured-lite",
+        ...(debug === "1" ? { tried, hints } : {}),
+      });
+    }
+
+    // 3) Free-text kandidaten (met FR geforceerd)
+    const candidates = [];
+    if (want.postalCode || want.city) {
+      candidates.push([want.city, want.postalCode, country].filter(Boolean).join(" ").trim());
+    }
+    if (hints.city || hints.postalCode) {
+      candidates.push([hints.city, hints.postalCode, country].filter(Boolean).join(" ").trim());
+    }
+    if (address) {
+      candidates.push([address, want.city || hints.city, country].filter(Boolean).join(" ").trim());
+    }
+
+    const triedText = [];
+    for (const q of candidates.filter(Boolean)) {
+      const list = await nominatimFreeText(q);
+      triedText.push({ q, got: list.length });
+      best = chooseBest(list, want);
+      if (best) {
         return res.status(200).json({
-          lat: Number(lat),
-          lng: Number(lon),
-          displayName: display_name,
-          bbox: boundingbox,
+          lat: Number(best.lat),
+          lng: Number(best.lon),
+          displayName: best.display_name,
+          bbox: best.boundingbox,
           q,
-          source: "nominatim",
-          ...(debug === "1" ? { tried, urlHints } : {}),
+          source: "nominatim-text",
+          ...(debug === "1" ? { tried, triedText, hints } : {}),
         });
       }
     }
 
-    // ---------- 4) Niets gevonden ----------
     return res.status(404).json({
       error: "not_found",
-      message: "Geen resultaten van Nominatim",
-      ...(debug === "1" ? { tried, urlHints, candidates } : {}),
+      message: "Geen resultaten na structured + text",
+      ...(debug === "1" ? { tried, triedText, hints, want } : {}),
     });
   } catch (e) {
     return res.status(500).json({ error: String(e?.message || e) });
