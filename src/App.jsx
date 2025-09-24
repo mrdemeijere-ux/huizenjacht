@@ -52,6 +52,8 @@ const db = initializeFirestore(app, {
   localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
 });
 
+const GEOCODE_ENDPOINT = import.meta?.env?.VITE_GEOCODE_ENDPOINT || "/api/geocode";
+
 // ===================== Constants =====================
 const STATUS_OPTIONS = [
   { value: "interessant", label: "Interessant" },
@@ -750,7 +752,7 @@ export default function App() {
 
                   <div className="flex flex-wrap items-start gap-2">
                     <a href={buildGoogleMapsUrl(it)} target="_blank" rel="noopener noreferrer" className="rounded-xl border px-3 py-2 text-sm shadow-sm hover:bg-slate-50">Google Maps</a>
-                    <a href={buildOsmUrl(it)} target="_blank" rel="noopener noreferrer" className="rounded-xl border px-3 py-2 text-sm shadow-sm hover:bg-slate-50">OpenStreetMap</a>
+                    <button onClick={() => openOsmApprox(it, updateItem)} className="rounded-xl border px-3 py-2 text-sm shadow-sm hover:bg-slate-50">OpenStreetMap</button>
                     <button onClick={() => startEdit(it)} className="rounded-xl border px-3 py-2 text-sm shadow-sm hover:bg-slate-50">Bewerken</button>
                     <button onClick={() => remove(it.id)} className="rounded-xl border px-3 py-2 text-sm shadow-sm hover:bg-rose-50">Verwijderen</button>
                     <button onClick={() => move(it.id, "up")} disabled={idx === 0} className="rounded-xl border px-3 py-2 text-sm shadow-sm disabled:opacity-40">↑</button>
@@ -794,7 +796,7 @@ export default function App() {
                   </div>
                   <div className="flex flex-wrap items-start gap-2">
                     <a href={buildGoogleMapsUrl(it)} target="_blank" rel="noopener noreferrer" className="rounded-xl border px-3 py-2 text-sm shadow-sm hover:bg-slate-50">Google Maps</a>
-                    <a href={buildOsmUrl(it)} target="_blank" rel="noopener noreferrer" className="rounded-xl border px-3 py-2 text-sm shadow-sm hover:bg-slate-50">OpenStreetMap</a>
+                    <button onClick={() => openOsmApprox(it, updateItem)} className="rounded-xl border px-3 py-2 text-sm shadow-sm hover:bg-slate-50">OpenStreetMap</button>
                     <button onClick={() => startEdit(it)} className="rounded-xl border px-3 py-2 text-sm shadow-sm hover:bg-slate-50">Bewerken</button>
                   </div>
                 </div>
@@ -924,6 +926,36 @@ export default function App() {
   }
 
 // Maps helpers
+function makeOsmUrl(lat, lng, z = 13) {
+  return `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lng}#map=${z}/${lat}/${lng}`;
+}
+
+async function openOsmApprox(it, updateItem) {
+  const hasCoords = Number(it?.lat) && Number(it?.lng);
+  if (hasCoords) {
+    window.open(makeOsmUrl(it.lat, it.lng), "_blank", "noopener");
+    return;
+  }
+  try {
+    const qs = new URLSearchParams({
+      url: it.url || "",
+      address: it.address || "",
+      city: it.city || "",
+      postalCode: it.postalCode || "",
+      country: it.country || "France",
+    });
+    const r = await fetch(`${GEOCODE_ENDPOINT}?${qs.toString()}`);
+    const data = await r.json();
+    if (!r.ok) throw new Error(data?.error || r.statusText);
+    const { lat, lng } = data;
+    if (it.id) await updateItem(it.id, { lat, lng }); // cache voor volgende keer
+    window.open(makeOsmUrl(lat, lng), "_blank", "noopener");
+  } catch (e) {
+    const q = encodeURIComponent([it.address, it.postalCode, it.city, it.country].filter(Boolean).join(" "));
+    window.open(`https://www.openstreetmap.org/search?query=${q}`, "_blank", "noopener");
+  }
+}
+
 function buildGoogleMapsUrl(item) {
   const hasCoords = item.lat && item.lng;
   if (hasCoords) {
