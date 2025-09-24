@@ -730,6 +730,11 @@ export default function App() {
                       {[it.postalCode, it.city].filter(Boolean).join(" ")}
                       {it.country ? `, ${it.country}` : ""}
                     </p>
+                    {Number(it.lat) && Number(it.lng) ? (
+                      <p className="mt-1 text-[11px] text-slate-500">📍 {Number(it.lat).toFixed(5)}, {Number(it.lng).toFixed(5)}{" "}
+                        <button type="button" className="underline" onClick={() => updateItem(it.id, { lat: "", lng: "" })} title="Verwijder opgeslagen coördinaten (volgende klik geocoden)">Reset coördinaten</button>
+                      </p>
+                    ) : null}
                     {it.agencyName && (<p className="text-xs text-slate-600">Makelaardij: {it.agencyName}</p>)}
                     {(it.agentName || it.agentPhone || it.agentEmail) && (
                       <p className="text-xs text-slate-600">Makelaar: {[it.agentName, it.agentPhone, it.agentEmail].filter(Boolean).join(" · ")}</p>
@@ -748,9 +753,14 @@ export default function App() {
                     </div>
 
                     {it.notes && <p className="mt-2 text-sm text-slate-600">🗒️ {it.notes}</p>}
+                    {Number(it.lat) && Number(it.lng) ? (
+                      <p className="mt-1 text-[11px] text-slate-500">📍 {Number(it.lat).toFixed(5)}, {Number(it.lng).toFixed(5)}{" "}
+                        <button type="button" className="underline" onClick={() => updateItem(it.id, { lat: "", lng: "" })} title="Verwijder opgeslagen coördinaten (volgende klik geocoden)">Reset coördinaten</button>
+                      </p>
+                    ) : null}
                   </div>
 
-                  <div className="flex flex-wrap items-start gap-2"><button onClick={() => openOsmApprox(it, updateItem)} className="rounded-xl border px-3 py-2 text-sm shadow-sm hover:bg-slate-50"><span aria-hidden="true" className="mr-1">🗺️</span><span>Toon op OSM</span></button>
+                  <div className="flex flex-wrap items-start gap-2"><button onClick={(e) => openOsmApprox(it, updateItem, { force: e.altKey || e.metaKey })} title="Tip: Alt/Option of ⌘/Ctrl ingedrukt = opnieuw geocoden" className="rounded-xl border px-3 py-2 text-sm shadow-sm hover:bg-slate-50"><span aria-hidden="true" className="mr-1">🗺️</span><span>Toon op OSM</span></button>
                     <button onClick={() => startEdit(it)} className="rounded-xl border px-3 py-2 text-sm shadow-sm hover:bg-slate-50">Bewerken</button>
                     <button onClick={() => remove(it.id)} className="rounded-xl border px-3 py-2 text-sm shadow-sm hover:bg-rose-50">Verwijderen</button>
                     <button onClick={() => move(it.id, "up")} disabled={idx === 0} className="rounded-xl border px-3 py-2 text-sm shadow-sm disabled:opacity-40">↑</button>
@@ -791,8 +801,13 @@ export default function App() {
                       {[it.postalCode, it.city].filter(Boolean).join(" ")}
                       {it.country ? `, ${it.country}` : ""}
                     </p>
+                    {Number(it.lat) && Number(it.lng) ? (
+                      <p className="mt-1 text-[11px] text-slate-500">📍 {Number(it.lat).toFixed(5)}, {Number(it.lng).toFixed(5)}{" "}
+                        <button type="button" className="underline" onClick={() => updateItem(it.id, { lat: "", lng: "" })} title="Verwijder opgeslagen coördinaten (volgende klik geocoden)">Reset coördinaten</button>
+                      </p>
+                    ) : null}
                   </div>
-                  <div className="flex flex-wrap items-start gap-2"><button onClick={() => openOsmApprox(it, updateItem)} className="rounded-xl border px-3 py-2 text-sm shadow-sm hover:bg-slate-50"><span aria-hidden="true" className="mr-1">🗺️</span><span>Toon op OSM</span></button>
+                  <div className="flex flex-wrap items-start gap-2"><button onClick={(e) => openOsmApprox(it, updateItem, { force: e.altKey || e.metaKey })} title="Tip: Alt/Option of ⌘/Ctrl ingedrukt = opnieuw geocoden" className="rounded-xl border px-3 py-2 text-sm shadow-sm hover:bg-slate-50"><span aria-hidden="true" className="mr-1">🗺️</span><span>Toon op OSM</span></button>
                     <button onClick={() => startEdit(it)} className="rounded-xl border px-3 py-2 text-sm shadow-sm hover:bg-slate-50">Bewerken</button>
                   </div>
                 </div>
@@ -828,6 +843,11 @@ export default function App() {
                       {[it.postalCode, it.city].filter(Boolean).join(" ")}
                       {it.country ? `, ${it.country}` : ""}
                     </p>
+                    {Number(it.lat) && Number(it.lng) ? (
+                      <p className="mt-1 text-[11px] text-slate-500">📍 {Number(it.lat).toFixed(5)}, {Number(it.lng).toFixed(5)}{" "}
+                        <button type="button" className="underline" onClick={() => updateItem(it.id, { lat: "", lng: "" })} title="Verwijder opgeslagen coördinaten (volgende klik geocoden)">Reset coördinaten</button>
+                      </p>
+                    ) : null}
                   </div>
                   <div className="flex flex-wrap items-start gap-2">
                     <button onClick={() => startEdit(it)} className="rounded-xl border px-3 py-2 text-sm shadow-sm hover:bg-slate-50">Bewerken</button>
@@ -917,18 +937,14 @@ export default function App() {
   );
 }
 
-  async function resetRatings(id) {
-    await updateItem(id, { ratings: defaultRatings() });
-  }
-
 // Maps helpers
-function makeOsmUrl(lat, lng, z = 13) {
+function makeOsmUrl(lat, lng, z = 14) {
   return `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lng}#map=${z}/${lat}/${lng}`;
 }
 
-async function openOsmApprox(it, updateItem) {
+async function openOsmApprox(it, updateItem, { force = false } = {}) {
   const hasCoords = Number(it?.lat) && Number(it?.lng);
-  if (hasCoords) {
+  if (hasCoords && !force) {
     window.open(makeOsmUrl(it.lat, it.lng), "_blank", "noopener");
     return;
   }
@@ -944,7 +960,7 @@ async function openOsmApprox(it, updateItem) {
     const data = await r.json();
     if (!r.ok) throw new Error(data?.error || r.statusText);
     const { lat, lng } = data;
-    if (it.id) await updateItem(it.id, { lat, lng }); // cache voor volgende keer
+    if (it.id && (force || !hasCoords)) await updateItem(it.id, { lat, lng });
     window.open(makeOsmUrl(lat, lng), "_blank", "noopener");
   } catch (e) {
     const q = encodeURIComponent([it.address, it.postalCode, it.city, it.country].filter(Boolean).join(" "));
