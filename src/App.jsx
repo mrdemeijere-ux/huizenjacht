@@ -674,7 +674,7 @@ const [myVotes, setMyVotes] = useState({}); // { [itemId]: 1 | -1 | 0 }
                     {it.notes && <p className="mt-2 text-sm text-slate-600">🗒️ {it.notes}</p>}
                   </div>
 
-                  <div className="flex flex-wrap sm:flex-nowrap items-start justify-start sm:justify-end gap-2 self-start shrink-0 min-w-max whitespace-nowrap">
+                  <div className="flex flex-wrap items-start justify-start gap-2 self-start sm:flex-nowrap sm:justify-end sm:min-w-max sm:whitespace-nowrap">
                     <button onClick={() => openOsmApprox(it, updateItem)} className="inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm shadow-sm hover:bg-slate-50">
                       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4"><path d="M9 3.5L3.5 5v15L9 18.5l6 2.5 5.5-1.5v-15L15 5.5 9 3.5zm6 3.31l3-.82v12.02l-3 .82V6.81zM8 5.19l5 2.08v12.54l-5-2.08V5.19zM5 6.06l2-.55v12.52l-2 .55V6.06z"/></svg>
                       Toon op OSM
@@ -742,7 +742,7 @@ const [myVotes, setMyVotes] = useState({}); // { [itemId]: 1 | -1 | 0 }
                       {it.country ? `, ${it.country}` : ""}
                     </p>
                   </div>
-                  <div className="flex flex-wrap sm:flex-nowrap items-start justify-start sm:justify-end gap-2 self-start shrink-0 min-w-max whitespace-nowrap">
+                  <div className="flex flex-wrap items-start justify-start gap-2 self-start sm:flex-nowrap sm:justify-end sm:min-w-max sm:whitespace-nowrap">
                     <button onClick={() => openOsmApprox(it, updateItem)} className="inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm shadow-sm hover:bg-slate-50">
                       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4"><path d="M9 3.5L3.5 5v15L9 18.5l6 2.5 5.5-1.5v-15L15 5.5 9 3.5zm6 3.31l3-.82v12.02l-3 .82V6.81zM8 5.19l5 2.08v12.54l-5-2.08V5.19zM5 6.06l2-.55v12.52l-2 .55V6.06z"/></svg>
                       Toon op OSM
@@ -806,7 +806,7 @@ const [myVotes, setMyVotes] = useState({}); // { [itemId]: 1 | -1 | 0 }
                       {it.country ? `, ${it.country}` : ""}
                     </p>
                   </div>
-                  <div className="flex flex-wrap sm:flex-nowrap items-start justify-start sm:justify-end gap-2 self-start shrink-0 min-w-max whitespace-nowrap">
+                  <div className="flex flex-wrap items-start justify-start gap-2 self-start sm:flex-nowrap sm:justify-end sm:min-w-max sm:whitespace-nowrap">
                     <button onClick={() => startEdit(it)} className="rounded-xl border px-3 py-2 text-sm shadow-sm hover:bg-slate-50">Bewerken</button>
                     <button type="button" onClick={async () => {
                       try {
@@ -853,12 +853,56 @@ const [myVotes, setMyVotes] = useState({}); // { [itemId]: 1 | -1 | 0 }
 
       {/* Onderste tabbar (mobielvriendelijk) */}
       <nav className="fixed bottom-0 left-0 right-0 z-40 border-t bg-white/95 backdrop-blur">
-        <div className="mx-auto max-w-6xl grid grid-cols-3">
-          <button onClick={() => setActiveTab("new")} className={`py-3 text-sm ${activeTab==='new' ? 'font-semibold text-slate-900' : 'text-slate-600'}`}>Nieuwe woning</button>
-          <button onClick={() => setActiveTab("all")} className={`py-3 text-sm ${activeTab==='all' ? 'font-semibold text-slate-900' : 'text-slate-600'}`}>Alle woningen</button>
-          <button onClick={() => setActiveTab("scheduled")} className={`py-3 text-sm ${activeTab==='scheduled' ? 'font-semibold text-slate-900' : 'text-slate-600'}`}>Ingepland</button>
-        </div>
-      </nav>
+  <div className="mx-auto max-w-6xl grid grid-cols-4">
+    {/* Nieuwe woning */}
+    <button
+      onClick={() => setActiveTab("new")}
+      aria-pressed={activeTab === "new"}
+      className={`flex flex-col items-center justify-center gap-1 py-2 ${activeTab==='new' ? 'text-slate-900 font-semibold' : 'text-slate-600'}`}
+    >
+      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M7 3h10a4 4 0 0 1 4 4v10a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V7a4 4 0 0 1 4-4m5 4a1 1 0 0 0-1 1v3H8a1 1 0 1 0 0 2h3v3a1 1 0 1 0 2 0v-3h3a1 1 0 1 0 0-2h-3V8a1 1 0 0 0-1-1Z"/>
+      </svg>
+      <span className="text-xs">Nieuwe woning</span>
+    </button>
+
+    {/* Alle woningen */}
+    <button
+      onClick={() => setActiveTab("all")}
+      aria-pressed={activeTab === "all"}
+      className={`flex flex-col items-center justify-center gap-1 py-2 ${activeTab==='all' ? 'text-slate-900 font-semibold' : 'text-slate-600'}`}
+    >
+      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M7 6h13a1 1 0 1 1 0 2H7a1 1 0 0 1 0-2Zm0 5h13a1 1 0 1 1 0 2H7a1 1 0 0 1 0-2Zm0 5h13a1 1 0 1 1 0 2H7a1 1 0 0 1 0-2ZM3 6.75A1.75 1.75 0 1 0 3 10.25 1.75 1.75 0 0 0 3 6.75Zm0 5A1.75 1.75 0 1 0 3 15.25 1.75 1.75 0 0 0 3 11.75Z"/>
+      </svg>
+      <span className="text-xs">Alle woningen</span>
+    </button>
+
+    {/* Ingepland */}
+    <button
+      onClick={() => setActiveTab("scheduled")}
+      aria-pressed={activeTab === "scheduled"}
+      className={`flex flex-col items-center justify-center gap-1 py-2 ${activeTab==='scheduled' ? 'text-slate-900 font-semibold' : 'text-slate-600'}`}
+    >
+      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M7 2a1 1 0 0 1 1 1v1h8V3a1 1 0 1 1 2 0v1h1a3 3 0 0 1 3 3v11a3 3 0 0 1-3 3H5a3 3 0 0 1-3-3V7a3 3 0 0 1 3-3h1V3a1 1 0 0 1 1-1Zm13 8H4v8a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-8ZM5 9h14V7a1 1 0 0 0-1-1h-1v1a1 1 0 1 1-2 0V6H8v1a1 1 0 1 1-2 0V6H5a1 1 0 0 0-1 1v2Z"/>
+      </svg>
+      <span className="text-xs">Ingepland</span>
+    </button>
+
+    {/* Reviews */}
+    <button
+      onClick={() => setActiveTab("reviews")}
+      aria-pressed={activeTab === "reviews"}
+      className={`flex flex-col items-center justify-center gap-1 py-2 ${activeTab==='reviews' ? 'text-slate-900 font-semibold' : 'text-slate-600'}`}
+    >
+      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M12 3.5 9.6 9H4.5l4.2 3.1L7.5 17 12 14.2 16.5 17l-1.2-4.9 4.2-3.1h-5.1L12 3.5Z"/>
+      </svg>
+      <span className="text-xs">Reviews</span>
+    </button>
+  </div>
+</nav>
     </div>
   );
 }
