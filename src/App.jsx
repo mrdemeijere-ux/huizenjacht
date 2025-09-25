@@ -380,6 +380,8 @@ async function openOsmApprox(it, updateItem) {
 // ===================== App =====================
 export default function App() {
   const [items, setItems] = useState([]);
+
+  const [editorItem, setEditorItem] = useState(null);
   const [form, setForm] = useState(emptyForm());
   const [editingId, setEditingId] = useState(null);
   const [filter, setFilter] = useState("");
