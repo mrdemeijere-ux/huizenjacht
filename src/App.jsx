@@ -1,13 +1,14 @@
+// Canvas refresh — volledige inhoud opnieuw gesynchroniseerd
 import React, { useEffect, useMemo, useState } from "react";
 
-// === Huizenjacht – App (canoniek, volledige versie) ===
+// === Huizenjacht – App (canoniek) ===
 // Single-file MVP (React + Tailwind + Firestore realtime sync)
 // Altijd online opslag (Firestore, collection boards/global/items)
 // Functies:
 // - Woning toevoegen/bewerken (titel, link, adres, GPS, makelaar, status, datum/tijd, notities, prijs)
 // - Lijsten: Alle woningen, Ingepland, Reviews
 // - Inline wijzigen van status en bezichtigingsdatum in lijsten
-// - LinkChip + (optioneel) SmartLinkPreview via serverless endpoint
+// - LinkChip + optionele SmartLinkPreview via serverless endpoint
 // - Geocoding via serverless /api/geocode → opent altijd OSM met juiste marker
 // - Gemiddelde beoordeling als badge in "Alle woningen" en "Ingepland"
 
@@ -28,6 +29,8 @@ import {
   orderBy,
   query,
   serverTimestamp,
+  runTransaction,
+  getDoc,
 } from "firebase/firestore";
 
 // 🔧 Gebruik Vercel/Vite env vars indien aanwezig
@@ -133,15 +136,20 @@ function formatEUR(value) {
   try {
     if (value == null || value === "" || isNaN(Number(value))) return "";
     return new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(Number(value));
-  } catch { return `€ ${Number(value || 0).toLocaleString("nl-NL")}`; }
+  } catch {
+    return `€ ${Number(value || 0).toLocaleString("nl-NL")}`;
+  }
 }
 
 function getUrlParts(u) {
-  try { const url = new URL(u); return { host: url.hostname.replace(/^www\./, ""), path: (url.pathname + url.search).replace(/\/$/, "") || "/" }; }
-  catch { return { host: u, path: "" }; }
+  try {
+    const url = new URL(u);
+    return { host: url.hostname.replace(/^www\./, ""), path: (url.pathname + url.search).replace(/\/$/, "") || "/" };
+  } catch { return { host: u, path: "" }; }
 }
 function hostInitial(host) { const h = (host || "?").trim(); return (h[0] || "?").toUpperCase(); }
 
+// Compacte link-chip
 function LinkChip({ url }) {
   if (!url) return null;
   const parts = getUrlParts(url);
@@ -153,6 +161,7 @@ function LinkChip({ url }) {
   );
 }
 
+// Rijke link preview via serverless endpoint (optioneel)
 function SmartLinkPreview({ url }) {
   const [meta, setMeta] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -174,7 +183,6 @@ function SmartLinkPreview({ url }) {
   }, [endpoint, url]);
 
   if (!endpoint || !url) return null;
-
   if (meta) {
     return (
       <a href={url} target="_blank" rel="noopener noreferrer" className="flex gap-3 rounded-xl border bg-white hover:bg-slate-50 transition px-3 py-3">
@@ -191,7 +199,6 @@ function SmartLinkPreview({ url }) {
       </a>
     );
   }
-
   if (loading) {
     return (
       <div className="flex items-center gap-3 rounded-xl border bg-slate-50 px-3 py-2 animate-pulse">
@@ -203,7 +210,6 @@ function SmartLinkPreview({ url }) {
       </div>
     );
   }
-
   return (
     <a href={url} target="_blank" rel="noopener noreferrer" className="flex items-center justify-between gap-3 rounded-xl border bg-slate-50 px-3 py-2" title={error ? `Preview niet beschikbaar: ${error}` : url}>
       <div className="flex min-w-0 items-center gap-3">
@@ -263,12 +269,14 @@ function formatViewing(dt) {
   } catch { return dt; }
 }
 
+// --- OSM helpers (altijd endpoint gebruiken) ---
 function makeOsmUrl(lat, lng, zoom = 12) {
   const la = Number(lat), lo = Number(lng);
   if (!isFinite(la) || !isFinite(lo)) return "https://www.openstreetmap.org";
   return `https://www.openstreetmap.org/?mlat=${la}&mlon=${lo}#map=${zoom}/${la}/${lo}`;
 }
 
+// Geocodeer ALTIJD via serverless endpoint, sla op, en open daarna OSM
 async function openOsmApprox(it, updateItem) {
   try {
     const qs = new URLSearchParams({
@@ -277,6 +285,7 @@ async function openOsmApprox(it, updateItem) {
       city: it.city || "",
       postalCode: it.postalCode || "",
       country: it.country || "France",
+      // debug: "1",
     });
     const r = await fetch(`${GEOCODE_ENDPOINT}?${qs.toString()}`);
     const data = await r.json();
@@ -287,6 +296,7 @@ async function openOsmApprox(it, updateItem) {
   } catch (e) { alert(`Geocoden mislukt: ${e?.message || e}`); }
 }
 
+// ===================== App =====================
 export default function App() {
   const [items, setItems] = useState([]);
   const [form, setForm] = useState(emptyForm());
@@ -296,6 +306,7 @@ export default function App() {
   const [sortBy, setSortBy] = useState("createdDesc");
   const [errors, setErrors] = useState({});
   const [activeTab, setActiveTab] = useState("all");
+const [myVotes, setMyVotes] = useState({}); // { [itemId]: 1 | -1 | 0 }
 
   const [user, setUser] = useState(null);
   const boardId = "global";
@@ -303,6 +314,7 @@ export default function App() {
   const [syncError, setSyncError] = useState(null);
   const [configOk] = useState(isFirebaseConfigured(firebaseConfig));
 
+  // Auth
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => {
       setUser(u || null);
@@ -311,17 +323,48 @@ export default function App() {
     return () => unsub();
   }, []);
 
+  // Firestore subscription
   useEffect(() => {
     if (!user) return;
     setDoc(doc(db, "boards", boardId), { createdAt: serverTimestamp() }, { merge: true }).catch(() => {});
     const qRef = query(collection(db, "boards", boardId, "items"), orderBy("order", "desc"));
     const unsub = onSnapshot(
       qRef,
-      (snap) => { const list = snap.docs.map((d) => ({ ...d.data(), id: d.id })); setItems(list); setLiveStatus("online"); setSyncError(null); },
+      (snap) => {
+        const list = snap.docs.map((d) => ({ ...d.data(), id: d.id }));
+        setItems(list); setLiveStatus("online"); setSyncError(null);
+      },
       (err) => { console.error("onSnapshot error", err); setLiveStatus("error"); setSyncError(err); }
     );
     return () => { setLiveStatus("offline"); unsub(); };
   }, [user]);
+
+  // Haal mijn stemmen op zodra items of user wijzigen
+  useEffect(() => {
+    if (!user || items.length === 0) {
+      setMyVotes({});
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const entries = await Promise.all(
+          items.map(async (it) => {
+            try {
+              const vSnap = await getDoc(doc(db, "boards", boardId, "items", it.id, "votes", user.uid));
+              return [it.id, vSnap.exists() ? (vSnap.data().v || 0) : 0];
+            } catch {
+              return [it.id, 0];
+            }
+          })
+        );
+        if (!cancelled) setMyVotes(Object.fromEntries(entries));
+      } catch {
+        /* noop */
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [user, items]);
 
   function resetForm() { setForm(emptyForm()); setErrors({}); }
 
@@ -379,6 +422,47 @@ export default function App() {
     await updateItem(id, patch);
   }
 
+  // Stemmen (like/dislike) met transacties en per-user vote document
+  async function castVote(itemId, value /* 1 = like, -1 = dislike */) {
+    if (!user) return;
+    const itemRef = doc(db, "boards", boardId, "items", itemId);
+    const voteRef = doc(db, "boards", boardId, "items", itemId, "votes", user.uid);
+
+    try {
+      await runTransaction(db, async (tx) => {
+        const itemSnap = await tx.get(itemRef);
+        if (!itemSnap.exists()) throw new Error("Item bestaat niet meer");
+
+        const data = itemSnap.data() || {};
+        let likes = Number(data.likes) || 0;
+        let dislikes = Number(data.dislikes) || 0;
+
+        const voteSnap = await tx.get(voteRef);
+        const prev = voteSnap.exists() ? (voteSnap.data().v || 0) : 0;
+
+        if (value === prev) {
+          if (prev === 1) likes--;
+          if (prev === -1) dislikes--;
+          tx.delete(voteRef);
+        } else {
+          if (prev === 1) likes--;
+          if (prev === -1) dislikes--;
+          if (value === 1) likes++;
+          if (value === -1) dislikes++;
+          tx.set(voteRef, { v: value, at: serverTimestamp() });
+        }
+        tx.update(itemRef, { likes, dislikes });
+      });
+
+      setMyVotes((m) => {
+        const prev = m[itemId] || 0;
+        return { ...m, [itemId]: value === prev ? 0 : value };
+      });
+    } catch (err) {
+      alert("Stemmen mislukt: " + (err?.message || String(err)));
+    }
+  }
+
   const visible = useMemo(() => {
     let v = [...items];
     if (filter.trim()) {
@@ -402,6 +486,7 @@ export default function App() {
 
   const isEditing = Boolean(editingId);
 
+  // ===================== Render =====================
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white text-slate-900 pb-24">
       <TopStatusBar liveStatus={liveStatus} />
@@ -413,7 +498,14 @@ export default function App() {
           </div>
         </header>
 
-        {/* Tabs */}
+        {syncError && (
+          <div className="mb-4 rounded-xl border border-rose-300 bg-rose-50 p-3 text-sm text-rose-900">
+            <div className="font-semibold">Sync fout</div>
+            <div className="mt-1"><code className="rounded bg-white/60 px-1">{syncError.code || "unknown"}</code> · {syncError.message || String(syncError)}</div>
+          </div>
+        )}
+
+        {/* Tabs boven-form */}
         <nav className="mb-4 flex gap-2 text-sm">
           <button onClick={() => setActiveTab("new")} className={`rounded-xl border px-3 py-2 ${activeTab==='new' ? 'bg-slate-900 text-white' : 'bg-white'}`}>Nieuwe woning</button>
           <button onClick={() => setActiveTab("all")} className={`rounded-xl border px-3 py-2 ${activeTab==='all' ? 'bg-slate-900 text-white' : 'bg-white'}`}>Alle woningen</button>
@@ -569,6 +661,7 @@ export default function App() {
                       <p className="text-xs text-slate-600">Makelaar: {[it.agentName, it.agentPhone, it.agentEmail].filter(Boolean).join(" · ")}</p>
                     )}
 
+                    {/* Inline wijzigen */}
                     <div className="mt-2 flex flex-wrap items-center gap-2 min-w-0">
                       <label className="text-xs text-slate-600">Status</label>
                       <select className="rounded-lg border px-2 py-1 text-xs" value={it.status} onChange={(e) => updateItem(it.id, { status: e.target.value })}>
@@ -593,6 +686,35 @@ export default function App() {
                   </div>
                 </div>
                 {it.url && <SmartLinkPreview url={it.url} />}
+
+                {/* Likes / Dislikes */}
+                <div className="mt-2 flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => castVote(it.id, 1)}
+                    aria-pressed={myVotes[it.id] === 1}
+                    className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-sm transition ${myVotes[it.id] === 1 ? "bg-emerald-50 border-emerald-200 text-emerald-700" : "hover:bg-slate-50"}`}
+                    title="Vind ik leuk"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M2 10h4v10H2V10Zm6.3 10h7.36a3 3 0 0 0 2.94-2.43l1.03-5.67A3 3 0 0 0 16.69 8H13V6a3 3 0 0 0-3-3h-.5a1 1 0 0 0-1 1.2l.7 3.5A2 2 0 0 1 8.25 9L8 10.5V20.5c.08.32.33.5.3.5Z"/>
+                    </svg>
+                    <span>{Number(it.likes) || 0}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => castVote(it.id, -1)}
+                    aria-pressed={myVotes[it.id] === -1}
+                    className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-sm transition ${myVotes[it.id] === -1 ? "bg-rose-50 border-rose-200 text-rose-700" : "hover:bg-slate-50"}`}
+                    title="Vind ik niet leuk"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M2 4h4v10H2V4Zm6.3-2h7.36A3 3 0 0 1 18.6 4.43l1.03 5.67A3 3 0 0 1 16.69 14H13v2a3 3 0 0 1-3 3h-.5a1 1 0 0 1-1-1.2l.7-3.5A2 2 0 0 0 8.25 12L8 10.5V1.5c.08-.32.33-.5.3-.5Z"/>
+                    </svg>
+                    <span>{Number(it.dislikes) || 0}</span>
+                  </button>
+                </div>
               </div>
             </article>
           ))}
@@ -629,12 +751,41 @@ export default function App() {
                   </div>
                 </div>
                 {it.url && <SmartLinkPreview url={it.url} />}
+
+                {/* Likes / Dislikes */}
+                <div className="mt-2 flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => castVote(it.id, 1)}
+                    aria-pressed={myVotes[it.id] === 1}
+                    className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-sm transition ${myVotes[it.id] === 1 ? "bg-emerald-50 border-emerald-200 text-emerald-700" : "hover:bg-slate-50"}`}
+                    title="Vind ik leuk"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M2 10h4v10H2V10Zm6.3 10h7.36a3 3 0 0 0 2.94-2.43l1.03-5.67A3 3 0 0 0 16.69 8H13V6a3 3 0 0 0-3-3h-.5a1 1 0 0 0-1 1.2l.7 3.5A2 2 0 0 1 8.25 9L8 10.5V20.5c.08.32.33.5.3.5Z"/>
+                    </svg>
+                    <span>{Number(it.likes) || 0}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => castVote(it.id, -1)}
+                    aria-pressed={myVotes[it.id] === -1}
+                    className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-sm transition ${myVotes[it.id] === -1 ? "bg-rose-50 border-rose-200 text-rose-700" : "hover:bg-slate-50"}`}
+                    title="Vind ik niet leuk"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M2 4h4v10H2V4Zm6.3-2h7.36A3 3 0 0 1 18.6 4.43l1.03 5.67A3 3 0 0 1 16.69 14H13v2a3 3 0 0 1-3 3h-.5a1 1 0 0 1-1-1.2l.7-3.5A2 2 0 0 0 8.25 12L8 10.5V1.5c.08-.32.33-.5.3-.5Z"/>
+                    </svg>
+                    <span>{Number(it.dislikes) || 0}</span>
+                  </button>
+                </div>
               </div>
             </article>
           ))}
         </section>
 
-        {/* Reviews */}
+        {/* Reviews Tab */}
         <section className={`${activeTab==='reviews' ? '' : 'hidden'} space-y-3`}>
           {items.length === 0 && (<div className="rounded-2xl border bg-white p-6 text-center text-slate-600">Nog geen woningen om te beoordelen.</div>)}
           {items.map((it) => (
@@ -660,15 +811,22 @@ export default function App() {
                     <button type="button" onClick={async () => {
                       try {
                         await updateDoc(doc(db, "boards", boardId, "items", it.id), {
-                          "ratings.overall": 0, "ratings.location": 0, "ratings.accessibility": 0,
-                          "ratings.business": 0, "ratings.renovation": 0, "ratings.parking": 0,
-                          "ratings.pool": 0, "ratings.privateAreas": 0, "ratings.feasibility": 0,
+                          "ratings.overall": 0,
+                          "ratings.location": 0,
+                          "ratings.accessibility": 0,
+                          "ratings.business": 0,
+                          "ratings.renovation": 0,
+                          "ratings.parking": 0,
+                          "ratings.pool": 0,
+                          "ratings.privateAreas": 0,
+                          "ratings.feasibility": 0,
                         });
                       } catch (err) { alert("Reset mislukt: " + (err?.message || String(err))); }
                     }} className="rounded-xl border px-3 py-2 text-sm shadow-sm hover:bg-white">Reset sterren</button>
                   </div>
                 </div>
 
+                {/* Volledige beoordeling invullen */}
                 <div className="rounded-xl border bg-slate-50 p-3">
                   <div className="mb-2 flex items-center justify-between">
                     <h4 className="text-sm font-semibold">Beoordeling</h4>
@@ -693,62 +851,14 @@ export default function App() {
         </section>
       </div>
 
-{/* Onderste tabbar (mobielvriendelijk, met icoontjes) */}
-<nav className="fixed bottom-0 left-0 right-0 z-40 border-t bg-white/95 backdrop-blur">
-  <div className="mx-auto max-w-6xl grid grid-cols-4">
-    {/* Nieuwe woning */}
-    <button
-      onClick={() => setActiveTab("new")}
-      aria-pressed={activeTab === "new"}
-      className={`flex flex-col items-center justify-center gap-1 py-2 ${activeTab==='new' ? 'text-slate-900 font-semibold' : 'text-slate-600'}`}
-    >
-      {/* plus-square */}
-      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
-        <path d="M7 3h10a4 4 0 0 1 4 4v10a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V7a4 4 0 0 1 4-4m5 4a1 1 0 0 0-1 1v3H8a1 1 0 1 0 0 2h3v3a1 1 0 1 0 2 0v-3h3a1 1 0 1 0 0-2h-3V8a1 1 0 0 0-1-1Z"/>
-      </svg>
-      <span className="text-xs">Nieuwe woning</span>
-    </button>
-
-    {/* Alle woningen */}
-    <button
-      onClick={() => setActiveTab("all")}
-      aria-pressed={activeTab === "all"}
-      className={`flex flex-col items-center justify-center gap-1 py-2 ${activeTab==='all' ? 'text-slate-900 font-semibold' : 'text-slate-600'}`}
-    >
-      {/* list-bullet */}
-      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
-        <path d="M7 6h13a1 1 0 1 1 0 2H7a1 1 0 0 1 0-2Zm0 5h13a1 1 0 1 1 0 2H7a1 1 0 0 1 0-2Zm0 5h13a1 1 0 1 1 0 2H7a1 1 0 0 1 0-2ZM3 6.75A1.75 1.75 0 1 0 3 10.25 1.75 1.75 0 0 0 3 6.75Zm0 5A1.75 1.75 0 1 0 3 15.25 1.75 1.75 0 0 0 3 11.75Z"/>
-      </svg>
-      <span className="text-xs">Alle woningen</span>
-    </button>
-
-    {/* Ingepland */}
-    <button
-      onClick={() => setActiveTab("scheduled")}
-      aria-pressed={activeTab === "scheduled"}
-      className={`flex flex-col items-center justify-center gap-1 py-2 ${activeTab==='scheduled' ? 'text-slate-900 font-semibold' : 'text-slate-600'}`}
-    >
-      {/* calendar */}
-      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
-        <path d="M7 2a1 1 0 0 1 1 1v1h8V3a1 1 0 1 1 2 0v1h1a3 3 0 0 1 3 3v11a3 3 0 0 1-3 3H5a3 3 0 0 1-3-3V7a3 3 0 0 1 3-3h1V3a1 1 0 0 1 1-1Zm13 8H4v8a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-8ZM5 9h14V7a1 1 0 0 0-1-1h-1v1a1 1 0 1 1-2 0V6H8v1a1 1 0 1 1-2 0V6H5a1 1 0 0 0-1 1v2Z"/>
-      </svg>
-      <span className="text-xs">Ingepland</span>
-    </button>
-
-    {/* Reviews */}
-    <button
-      onClick={() => setActiveTab("reviews")}
-      aria-pressed={activeTab === "reviews"}
-      className={`flex flex-col items-center justify-center gap-1 py-2 ${activeTab==='reviews' ? 'text-slate-900 font-semibold' : 'text-slate-600'}`}
-    >
-      {/* star */}
-      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
-        <path d="M12 3.5 9.6 9H4.5l4.2 3.1L7.5 17 12 14.2 16.5 17l-1.2-4.9 4.2-3.1h-5.1L12 3.5Z"/>
-      </svg>
-      <span className="text-xs">Reviews</span>
-    </button>
-  </div>
-</nav>
+      {/* Onderste tabbar (mobielvriendelijk) */}
+      <nav className="fixed bottom-0 left-0 right-0 z-40 border-t bg-white/95 backdrop-blur">
+        <div className="mx-auto max-w-6xl grid grid-cols-3">
+          <button onClick={() => setActiveTab("new")} className={`py-3 text-sm ${activeTab==='new' ? 'font-semibold text-slate-900' : 'text-slate-600'}`}>Nieuwe woning</button>
+          <button onClick={() => setActiveTab("all")} className={`py-3 text-sm ${activeTab==='all' ? 'font-semibold text-slate-900' : 'text-slate-600'}`}>Alle woningen</button>
+          <button onClick={() => setActiveTab("scheduled")} className={`py-3 text-sm ${activeTab==='scheduled' ? 'font-semibold text-slate-900' : 'text-slate-600'}`}>Ingepland</button>
+        </div>
+      </nav>
     </div>
   );
 }
