@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 
+// === CANONICAL: Huizenjacht - App — gebruik deze versie (laatst bijgewerkt: 2025-09-23) ===
 // Huizenjacht – single-file MVP (React + Tailwind + Firestore realtime sync)
 // Altijd online opslag (Firebase Firestore) – geen boards of lokale opslag
 // Features:
@@ -50,6 +51,8 @@ const db = initializeFirestore(app, {
   useFetchStreams: false,
   localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
 });
+
+const GEOCODE_ENDPOINT = import.meta?.env?.VITE_GEOCODE_ENDPOINT || "/api/geocode";
 
 // ===================== Constants =====================
 const STATUS_OPTIONS = [
@@ -210,7 +213,6 @@ function SmartLinkPreview({ url }) {
         if (data && (data.title || data.image || data.description)) {
           setMeta(data);
         } else {
-          // Geen bruikbare OG-tags → fallback
           setMeta(null);
         }
       })
@@ -227,7 +229,6 @@ function SmartLinkPreview({ url }) {
 
   if (!endpoint || !url) return null; // endpoint niet geconfigureerd → sla over
 
-  // Volwaardige kaart
   if (meta) {
     return (
       <a
@@ -254,7 +255,6 @@ function SmartLinkPreview({ url }) {
     );
   }
 
-  // Skeleton tijdens laden
   if (loading) {
     return (
       <div className="flex items-center gap-3 rounded-xl border bg-slate-50 px-3 py-2 animate-pulse">
@@ -267,7 +267,6 @@ function SmartLinkPreview({ url }) {
     );
   }
 
-  // Fallback-kaartje wanneer OG-meta ontbreekt of request faalt
   return (
     <a
       href={url}
@@ -294,9 +293,9 @@ function StarRating({ value = 0, onChange, size = "md", label, hint }) {
   const stars = [1, 2, 3, 4, 5];
   const cls = size === "sm" ? "text-sm" : size === "lg" ? "text-xl" : "text-base";
   return (
-    <div className="flex items-center gap-2">
-      {label && <span className="w-48 text-sm text-slate-700">{label}</span>}
-      <div className="flex items-center">
+    <div className="flex items-start gap-2 min-w-0">
+      {label && <span className="w-40 sm:w-56 md:w-64 shrink-0 text-sm text-slate-700 leading-snug">{label}</span>}
+      <div className="flex items-center flex-shrink-0">
         {stars.map((n) => (
           <button
             key={n}
@@ -349,6 +348,7 @@ export default function App() {
   const [statusFilter, setStatusFilter] = useState("");
   const [sortBy, setSortBy] = useState("createdDesc");
   const [errors, setErrors] = useState({});
+  const [activeTab, setActiveTab] = useState("all");
 
   const [user, setUser] = useState(null);
   const boardId = "global"; // vaste opslaglocatie
@@ -412,6 +412,7 @@ export default function App() {
     try {
       await addDoc(collection(db, "boards", boardId, "items"), withMeta);
       resetForm();
+      setActiveTab("all");
     } catch (err) {
       alert("Opslaan in Firestore mislukt: " + (err?.message || String(err)));
     }
@@ -420,6 +421,7 @@ export default function App() {
   function startEdit(it) {
     setEditingId(it.id);
     setForm({ ...it });
+    setActiveTab("new");
   }
 
   async function saveEdit() {
@@ -432,6 +434,7 @@ export default function App() {
       await updateDoc(doc(db, "boards", boardId, "items", editingId), payload);
       setEditingId(null);
       resetForm();
+      setActiveTab("all");
     } catch (err) {
       alert("Bijwerken mislukt: " + (err?.message || String(err)));
     }
@@ -517,6 +520,13 @@ export default function App() {
     return v;
   }, [items, filter, statusFilter, sortBy]);
 
+  const scheduledVisible = useMemo(() => {
+    return items
+      .filter((it) => it.viewingAt)
+      .slice()
+      .sort((a, b) => new Date(a.viewingAt) - new Date(b.viewingAt));
+  }, [items]);
+
   const isEditing = Boolean(editingId);
 
   function formatViewing(dt) {
@@ -532,7 +542,7 @@ export default function App() {
 
   // ===================== Render =====================
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white text-slate-900">
+    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white text-slate-900 pb-24">
       <TopStatusBar liveStatus={liveStatus} />
       <div className="mx-auto max-w-6xl p-6">
         <header className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
@@ -552,7 +562,7 @@ export default function App() {
         )}
 
         {/* Formulier */}
-        <section className="mb-8 rounded-2xl border bg-white p-4 shadow-sm">
+        <section className={`mb-8 rounded-2xl border bg-white p-4 shadow-sm ${activeTab==='new' ? '' : 'hidden'}`}>
           <h2 className="mb-3 text-lg font-semibold">{isEditing ? "Woning bewerken" : "Nieuwe woning toevoegen"}</h2>
           <form onSubmit={isEditing ? (e) => { e.preventDefault(); saveEdit(); } : handleSubmit} className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div>
@@ -623,7 +633,7 @@ export default function App() {
               </div>
               <div className="sm:col-span-2">
                 <label className="text-sm font-medium">Geplande bezichtiging (datum/tijd)</label>
-                <input type="datetime-local" className="mt-1 w-full rounded-xl border px-3 py-2" value={form.viewingAt} onChange={(e) => setForm({ ...form, viewingAt: e.target.value })} />
+                <input type="datetime-local" className="mt-1 w-full max-w-full min-w-0 appearance-none rounded-xl border px-3 py-2" value={form.viewingAt} onChange={(e) => setForm({ ...form, viewingAt: e.target.value })} />
                 <p className="mt-1 text-xs text-slate-500">Tip: dit gebruikt je lokale tijdzone.</p>
               </div>
             </div>
@@ -660,29 +670,45 @@ export default function App() {
         </section>
 
         {/* Filters/Sortering */}
-        <section className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex gap-2">
-            <input className="w-64 rounded-xl border px-3 py-2" placeholder="Zoek op adres, plaats, makelaar..." value={filter} onChange={(e) => setFilter(e.target.value)} />
-            <select className="rounded-xl border px-3 py-2" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+        <section className={`${activeTab==='all' ? '' : 'hidden'} mb-3`}>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <input
+              className="w-full min-w-0 rounded-xl border px-3 py-2"
+              placeholder="Zoek op adres, plaats, makelaar..."
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+            />
+            <select
+              className="w-full min-w-0 rounded-xl border px-3 py-2"
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+            >
               <option value="">Alle statussen</option>
-              {STATUS_OPTIONS.map((o) => (<option key={o.value} value={o.value}>{o.label}</option>))}
+              {STATUS_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
             </select>
-          </div>
-          <div className="flex gap-2">
-            <label className="text-sm">Sorteren:
-              <select className="ml-2 rounded-xl border px-3 py-2" value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
+            <div className="w-full min-w-0">
+              <label className="sr-only">Sorteren</label>
+              <select
+                className="w-full rounded-xl border px-3 py-2"
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+              >
                 <option value="createdDesc">Nieuwste eerst</option>
                 <option value="cityAsc">Plaats A→Z</option>
                 <option value="statusAsc">Status A→Z</option>
                 <option value="priceAsc">Prijs laag → hoog</option>
                 <option value="priceDesc">Prijs hoog → laag</option>
               </select>
-            </label>
+            </div>
           </div>
         </section>
 
         {/* Lijst */}
-        <section className="space-y-3">
+        <section className={`space-y-3 ${activeTab==='all' ? '' : 'hidden'}`}>
           {visible.length === 0 && (
             <div className="rounded-2xl border bg-white p-6 text-center text-slate-600">Nog geen woningen opgeslagen.</div>
           )}
@@ -691,15 +717,12 @@ export default function App() {
               <div className="flex flex-col gap-3">
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                   <div className="grow">
-                    <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2 min-w-0">
                       <h3 className="text-lg font-semibold">{it.title || "(Geen titel)"}</h3>
                       <span className={badgeClass(it.status)}>{STATUS_OPTIONS.find((s) => s.value === it.status)?.label || it.status}</span>
                       {it.url && <LinkChip url={it.url} />}
                       {Number(it.price) > 0 && (
                         <span className="ml-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">{formatEUR(it.price)}</span>
-                      )}
-                      {averageRating(it.ratings) > 0 && (
-                        <span className="ml-2 rounded-full bg-yellow-50 px-2 py-0.5 text-xs font-medium text-amber-700">⭐ {averageRating(it.ratings)}/5</span>
                       )}
                     </div>
                     <p className="text-sm text-slate-700">
@@ -707,51 +730,37 @@ export default function App() {
                       {[it.postalCode, it.city].filter(Boolean).join(" ")}
                       {it.country ? `, ${it.country}` : ""}
                     </p>
+                    {Number(it.lat) && Number(it.lng) ? (
+                      <p className="mt-1 text-[11px] text-slate-500">📍 {Number(it.lat).toFixed(5)}, {Number(it.lng).toFixed(5)}{" "}
+                        <button type="button" className="underline" onClick={() => updateItem(it.id, { lat: "", lng: "" })} title="Verwijder opgeslagen coördinaten (volgende klik geocoden)">Reset coördinaten</button>
+                      </p>
+                    ) : null}
                     {it.agencyName && (<p className="text-xs text-slate-600">Makelaardij: {it.agencyName}</p>)}
                     {(it.agentName || it.agentPhone || it.agentEmail) && (
                       <p className="text-xs text-slate-600">Makelaar: {[it.agentName, it.agentPhone, it.agentEmail].filter(Boolean).join(" · ")}</p>
                     )}
 
                     {/* Inline wijzigen: status + datum/tijd */}
-                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <div className="mt-2 flex flex-wrap items-center gap-2 min-w-0">
                       <label className="text-xs text-slate-600">Status</label>
                       <select className="rounded-lg border px-2 py-1 text-xs" value={it.status} onChange={(e) => updateItem(it.id, { status: e.target.value })}>
                         {STATUS_OPTIONS.map((o) => (<option key={o.value} value={o.value}>{o.label}</option>))}
                       </select>
 
                       <label className="ml-2 text-xs text-slate-600">Bezichtiging</label>
-                      <input type="datetime-local" className="rounded-lg border px-2 py-1 text-xs" value={it.viewingAt || ""} onChange={(e) => updateItem(it.id, { viewingAt: e.target.value })} />
+                      <input type="datetime-local" className="rounded-lg border px-2 py-1 text-xs w-full sm:w-auto min-w-0 max-w-full appearance-none" value={it.viewingAt || ""} onChange={(e) => updateItem(it.id, { viewingAt: e.target.value })} />
                       {it.viewingAt && (<span className="text-xs text-slate-600">({formatViewing(it.viewingAt)})</span>)}
                     </div>
 
-                    {/* Beoordelingen */}
-                    <div className="mt-3 rounded-xl border bg-slate-50 p-3">
-                      <div className="mb-2 flex items-center justify-between">
-                        <h4 className="text-sm font-semibold">Beoordeling</h4>
-                        <span className="text-xs text-slate-600">Gemiddelde: {averageRating(it.ratings) || "–"}/5</span>
-                      </div>
-                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                        <StarRating value={it.ratings?.overall || 0} onChange={(v) => updateRating(it.id, "overall", v)} label="Algehele indruk" />
-                        <StarRating value={it.ratings?.location || 0} onChange={(v) => updateRating(it.id, "location", v)} label="Locatie / Ligging" />
-                        <StarRating value={it.ratings?.accessibility || 0} onChange={(v) => updateRating(it.id, "accessibility", v)} label="Bereikbaarheid" />
-                        <StarRating value={it.ratings?.business || 0} onChange={(v) => updateRating(it.id, "business", v)} label="Bedrijfspotentieel" />
-                        <StarRating value={it.ratings?.renovation || 0} onChange={(v) => updateRating(it.id, "renovation", v)} label="Benodigd verbouwingsbudget" hint="5 = weinig budget nodig" />
-                        <StarRating value={it.ratings?.parking || 0} onChange={(v) => updateRating(it.id, "parking", v)} label="Parkeergelegenheid" />
-                        <StarRating value={it.ratings?.pool || 0} onChange={(v) => updateRating(it.id, "pool", v)} label="Zwembad" />
-                        <StarRating value={it.ratings?.privateAreas || 0} onChange={(v) => updateRating(it.id, "privateAreas", v)} label="Privévertrekken" />
-                        <StarRating value={it.ratings?.feasibility || 0} onChange={(v) => updateRating(it.id, "feasibility", v)} label="Realiseerbaarheid" />
-                      </div>
-                      {it.status !== "bezichtigd" && (
-                        <p className="mt-2 text-xs text-slate-500">Tip: markeer de status als <em>Bezichtigd</em> zodra je de beoordeling definitief maakt.</p>
-                      )}
-                    </div>
-
                     {it.notes && <p className="mt-2 text-sm text-slate-600">🗒️ {it.notes}</p>}
+                    {Number(it.lat) && Number(it.lng) ? (
+                      <p className="mt-1 text-[11px] text-slate-500">📍 {Number(it.lat).toFixed(5)}, {Number(it.lng).toFixed(5)}{" "}
+                        <button type="button" className="underline" onClick={() => updateItem(it.id, { lat: "", lng: "" })} title="Verwijder opgeslagen coördinaten (volgende klik geocoden)">Reset coördinaten</button>
+                      </p>
+                    ) : null}
                   </div>
 
-                  <div className="flex flex-wrap items-start gap-2">
-                    <a href={buildGoogleMapsUrl(it)} target="_blank" rel="noopener noreferrer" className="rounded-xl border px-3 py-2 text-sm shadow-sm hover:bg-slate-50">Google Maps</a>
-                    <a href={buildOsmUrl(it)} target="_blank" rel="noopener noreferrer" className="rounded-xl border px-3 py-2 text-sm shadow-sm hover:bg-slate-50">OpenStreetMap</a>
+                  <div className="flex flex-wrap items-start gap-2"><button onClick={(e) => openOsmApprox(it, updateItem, { force: e.altKey || e.metaKey })} title="Tip: Alt/Option of ⌘/Ctrl ingedrukt = opnieuw geocoden" className="rounded-xl border px-3 py-2 text-sm shadow-sm hover:bg-slate-50"><span aria-hidden="true" className="mr-1">🗺️</span><span>Toon op OSM</span></button>
                     <button onClick={() => startEdit(it)} className="rounded-xl border px-3 py-2 text-sm shadow-sm hover:bg-slate-50">Bewerken</button>
                     <button onClick={() => remove(it.id)} className="rounded-xl border px-3 py-2 text-sm shadow-sm hover:bg-rose-50">Verwijderen</button>
                     <button onClick={() => move(it.id, "up")} disabled={idx === 0} className="rounded-xl border px-3 py-2 text-sm shadow-sm disabled:opacity-40">↑</button>
@@ -766,30 +775,197 @@ export default function App() {
           ))}
         </section>
 
+        {/* Ingeplande bezichtigingen */}
+        <section className={`${activeTab==='scheduled' ? '' : 'hidden'} space-y-3`}>
+          {scheduledVisible.length === 0 && (
+            <div className="rounded-2xl border bg-white p-6 text-center text-slate-600">Geen ingeplande bezichtigingen.</div>
+          )}
+          {scheduledVisible.map((it) => (
+            <article key={`sched-${it.id}`} className="rounded-2xl border bg-white p-4 shadow-sm">
+              <div className="flex flex-col gap-3">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="grow">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="text-lg font-semibold">{it.title || "(Geen titel)"}</h3>
+                      <span className={badgeClass(it.status)}>{STATUS_OPTIONS.find((s) => s.value === it.status)?.label || it.status}</span>
+                      {it.url && <LinkChip url={it.url} />}
+                      {Number(it.price) > 0 && (
+                        <span className="ml-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">{formatEUR(it.price)}</span>
+                      )}
+                    </div>
+                    {it.viewingAt && (
+                      <p className="mt-1 text-sm text-slate-700">📅 Bezichtiging: {formatViewing(it.viewingAt)}</p>
+                    )}
+                    <p className="text-sm text-slate-700">
+                      {it.address && <span>{it.address}, </span>}
+                      {[it.postalCode, it.city].filter(Boolean).join(" ")}
+                      {it.country ? `, ${it.country}` : ""}
+                    </p>
+                    {Number(it.lat) && Number(it.lng) ? (
+                      <p className="mt-1 text-[11px] text-slate-500">📍 {Number(it.lat).toFixed(5)}, {Number(it.lng).toFixed(5)}{" "}
+                        <button type="button" className="underline" onClick={() => updateItem(it.id, { lat: "", lng: "" })} title="Verwijder opgeslagen coördinaten (volgende klik geocoden)">Reset coördinaten</button>
+                      </p>
+                    ) : null}
+                  </div>
+                  <div className="flex flex-wrap items-start gap-2"><button onClick={(e) => openOsmApprox(it, updateItem, { force: e.altKey || e.metaKey })} title="Tip: Alt/Option of ⌘/Ctrl ingedrukt = opnieuw geocoden" className="rounded-xl border px-3 py-2 text-sm shadow-sm hover:bg-slate-50"><span aria-hidden="true" className="mr-1">🗺️</span><span>Toon op OSM</span></button>
+                    <button onClick={() => startEdit(it)} className="rounded-xl border px-3 py-2 text-sm shadow-sm hover:bg-slate-50">Bewerken</button>
+                  </div>
+                </div>
+                {it.url && <SmartLinkPreview url={it.url} />}
+              </div>
+            </article>
+          ))}
+        </section>
+
+        {/* Reviews Tab */}
+        <section className={`${activeTab==='reviews' ? '' : 'hidden'} space-y-3`}>
+          {items.length === 0 && (
+            <div className="rounded-2xl border bg-white p-6 text-center text-slate-600">Nog geen woningen om te beoordelen.</div>
+          )}
+          {items.map((it) => (
+            <article key={`rev-${it.id}`} className="rounded-2xl border bg-white p-4 shadow-sm">
+              <div className="flex flex-col gap-3">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="grow">
+                    <div className="flex flex-wrap items-center gap-2 min-w-0">
+                      <h3 className="text-lg font-semibold">{it.title || "(Geen titel)"}</h3>
+                      <span className={badgeClass(it.status)}>{STATUS_OPTIONS.find((s) => s.value === it.status)?.label || it.status}</span>
+                      {it.url && <LinkChip url={it.url} />}
+                      {Number(it.price) > 0 && (
+                        <span className="ml-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">{formatEUR(it.price)}</span>
+                      )}
+                      {activeTab==='reviews' && averageRating(it.ratings) > 0 && (
+                        <span className="ml-2 rounded-full bg-yellow-50 px-2 py-0.5 text-xs font-medium text-amber-700">⭐ {averageRating(it.ratings)}/5</span>
+                      )}
+                    </div>
+                    <p className="text-sm text-slate-700">
+                      {it.address && <span>{it.address}, </span>}
+                      {[it.postalCode, it.city].filter(Boolean).join(" ")}
+                      {it.country ? `, ${it.country}` : ""}
+                    </p>
+                    {Number(it.lat) && Number(it.lng) ? (
+                      <p className="mt-1 text-[11px] text-slate-500">📍 {Number(it.lat).toFixed(5)}, {Number(it.lng).toFixed(5)}{" "}
+                        <button type="button" className="underline" onClick={() => updateItem(it.id, { lat: "", lng: "" })} title="Verwijder opgeslagen coördinaten (volgende klik geocoden)">Reset coördinaten</button>
+                      </p>
+                    ) : null}
+                  </div>
+                  <div className="flex flex-wrap items-start gap-2">
+                    <button onClick={() => startEdit(it)} className="rounded-xl border px-3 py-2 text-sm shadow-sm hover:bg-slate-50">Bewerken</button>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          await updateDoc(doc(db, "boards", boardId, "items", it.id), {
+                            "ratings.overall": 0,
+                            "ratings.location": 0,
+                            "ratings.accessibility": 0,
+                            "ratings.business": 0,
+                            "ratings.renovation": 0,
+                            "ratings.parking": 0,
+                            "ratings.pool": 0,
+                            "ratings.privateAreas": 0,
+                            "ratings.feasibility": 0,
+                          });
+                        } catch (err) {
+                          alert("Reset mislukt: " + (err?.message || String(err)));
+                        }
+                      }}
+                      className="rounded-xl border px-3 py-2 text-sm shadow-sm hover:bg-white"
+                    >
+                      Reset sterren
+                    </button>
+                  </div>
+                </div>
+
+                {/* Volledige beoordeling invullen */}
+                <div className="rounded-xl border bg-slate-50 p-3">
+                  <div className="mb-2 flex items-center justify-between">
+                    <h4 className="text-sm font-semibold">Beoordeling</h4>
+                    <span className="text-xs text-slate-600">Gemiddelde: {averageRating(it.ratings) || "–"}/5</span>
+                  </div>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    <StarRating value={it.ratings?.overall || 0} onChange={(v) => updateRating(it.id, "overall", v)} label="Algehele indruk" />
+                    <StarRating value={it.ratings?.location || 0} onChange={(v) => updateRating(it.id, "location", v)} label="Locatie / Ligging" />
+                    <StarRating value={it.ratings?.accessibility || 0} onChange={(v) => updateRating(it.id, "accessibility", v)} label="Bereikbaarheid" />
+                    <StarRating value={it.ratings?.business || 0} onChange={(v) => updateRating(it.id, "business", v)} label="Bedrijfspotentieel" />
+                    <StarRating value={it.ratings?.renovation || 0} onChange={(v) => updateRating(it.id, "renovation", v)} label="Benodigd verbouwingsbudget" hint="5 = weinig budget nodig" />
+                    <StarRating value={it.ratings?.parking || 0} onChange={(v) => updateRating(it.id, "parking", v)} label="Parkeergelegenheid" />
+                    <StarRating value={it.ratings?.pool || 0} onChange={(v) => updateRating(it.id, "pool", v)} label="Zwembad" />
+                    <StarRating value={it.ratings?.privateAreas || 0} onChange={(v) => updateRating(it.id, "privateAreas", v)} label="Privévertrekken" />
+                    <StarRating value={it.ratings?.feasibility || 0} onChange={(v) => updateRating(it.id, "feasibility", v)} label="Realiseerbaarheid" />
+                  </div>
+                  {it.status !== "bezichtigd" && (
+                    <p className="mt-2 text-xs text-slate-500">Tip: markeer de status als <em>Bezichtigd</em> zodra je de beoordeling definitief maakt.</p>
+                  )}
+                </div>
+              </div>
+            </article>
+          ))}
+        </section>
+
         <footer className="mt-10 space-y-1 text-center text-xs text-slate-500">
           <p>Realtime via Firestore (altijd online opslag).</p>
-          <p>Build: Firestore Sync · prijs & rich link preview · LinkChip in kopregel.</p>
+          <p>Build: Firestore Sync · prijs & rich link preview · LinkChip in kopregel · tab bar onderin.</p>
         </footer>
       </div>
+
+      {/* Bottom Tab Bar */}
+      <nav className="fixed bottom-0 inset-x-0 border-t bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80">
+        <div className="mx-auto max-w-6xl px-4">
+          <div className="grid grid-cols-4 text-sm">
+            <button onClick={() => setActiveTab('new')} className={`flex flex-col items-center gap-1 py-3 ${activeTab==='new'?'text-slate-900 font-medium':'text-slate-500'}`}>
+              <span>➕</span>
+              <span>Nieuwe woning</span>
+            </button>
+            <button onClick={() => setActiveTab('all')} className={`flex flex-col items-center gap-1 py-3 ${activeTab==='all'?'text-slate-900 font-medium':'text-slate-500'}`}>
+              <span>📋</span>
+              <span>Alle woningen</span>
+            </button>
+            <button onClick={() => setActiveTab('scheduled')} className={`flex flex-col items-center gap-1 py-3 ${activeTab==='scheduled'?'text-slate-900 font-medium':'text-slate-500'}`}>
+              <span>📅</span>
+              <span>Ingepland</span>
+            </button>
+            <button onClick={() => setActiveTab('reviews')} className={`flex flex-col items-center gap-1 py-3 ${activeTab==='reviews'?'text-slate-900 font-medium':'text-slate-500'}`}>
+              <span>⭐</span>
+              <span>Reviews</span>
+            </button>
+          </div>
+        </div>
+      </nav>
+
     </div>
   );
 }
 
 // Maps helpers
-function buildGoogleMapsUrl(item) {
-  const hasCoords = item.lat && item.lng;
-  if (hasCoords) {
-    return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${item.lat},${item.lng}`)}`;
-  }
-  const q = [item.address, item.postalCode, item.city, item.country].filter(Boolean).join(", ");
-  return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(q)}`;
+function makeOsmUrl(lat, lng, z = 14) {
+  return `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lng}#map=${z}/${lat}/${lng}`;
 }
 
-function buildOsmUrl(item) {
-  if (item.lat && item.lng) {
-    const coords = `;${item.lat},${item.lng}`;
-    return `https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=${encodeURIComponent(coords)}`;
+async function openOsmApprox(it, updateItem, { force = false } = {}) {
+  const hasCoords = Number(it?.lat) && Number(it?.lng);
+  // Gebruik opgeslagen coördinaten tenzij we forceren opnieuw te geocoden
+  if (hasCoords && !force) {
+    window.open(makeOsmUrl(it.lat, it.lng), "_blank", "noopener");
+    return;
   }
-  const q = [item.address, item.postalCode, item.city, item.country].filter(Boolean).join(", ");
-  return `https://www.openstreetmap.org/search?query=${encodeURIComponent(q)}`;
+  try {
+    const qs = new URLSearchParams({
+      url: it.url || "",
+      address: it.address || "",
+      city: it.city || "",
+      postalCode: it.postalCode || "",
+      country: it.country || "France",
+    });
+    const r = await fetch(`${GEOCODE_ENDPOINT}?${qs.toString()}`);
+    const data = await r.json();
+    if (!r.ok) throw new Error(data?.error || r.statusText);
+    const { lat, lng } = data;
+    if (it.id && (force || !hasCoords)) await updateItem(it.id, { lat, lng });
+    window.open(makeOsmUrl(lat, lng), "_blank", "noopener");
+  } catch (e) {
+    // Geen OSM-zoekfallback meer om ambiguïteit te vermijden
+    alert(`Geocoden mislukt: ${e?.message || e}. Probeer het later opnieuw of vul (tijdelijk) handmatig lat/lng in.`);
+  }
 }
+
