@@ -693,36 +693,59 @@ export default function App() {
         </section>
       </div>
 
-{/* Onderste tabbar (mobielvriendelijk) */}
+{/* Onderste tabbar (mobielvriendelijk, met icoontjes) */}
 <nav className="fixed bottom-0 left-0 right-0 z-40 border-t bg-white/95 backdrop-blur">
   <div className="mx-auto max-w-6xl grid grid-cols-4">
+    {/* Nieuwe woning */}
     <button
       onClick={() => setActiveTab("new")}
       aria-pressed={activeTab === "new"}
-      className={`py-3 text-sm ${activeTab==='new' ? 'font-semibold text-slate-900' : 'text-slate-600'}`}
+      className={`flex flex-col items-center justify-center gap-1 py-2 ${activeTab==='new' ? 'text-slate-900 font-semibold' : 'text-slate-600'}`}
     >
-      Nieuwe woning
+      {/* plus-square */}
+      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M7 3h10a4 4 0 0 1 4 4v10a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V7a4 4 0 0 1 4-4m5 4a1 1 0 0 0-1 1v3H8a1 1 0 1 0 0 2h3v3a1 1 0 1 0 2 0v-3h3a1 1 0 1 0 0-2h-3V8a1 1 0 0 0-1-1Z"/>
+      </svg>
+      <span className="text-xs">Nieuwe woning</span>
     </button>
+
+    {/* Alle woningen */}
     <button
       onClick={() => setActiveTab("all")}
       aria-pressed={activeTab === "all"}
-      className={`py-3 text-sm ${activeTab==='all' ? 'font-semibold text-slate-900' : 'text-slate-600'}`}
+      className={`flex flex-col items-center justify-center gap-1 py-2 ${activeTab==='all' ? 'text-slate-900 font-semibold' : 'text-slate-600'}`}
     >
-      Alle woningen
+      {/* list-bullet */}
+      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M7 6h13a1 1 0 1 1 0 2H7a1 1 0 0 1 0-2Zm0 5h13a1 1 0 1 1 0 2H7a1 1 0 0 1 0-2Zm0 5h13a1 1 0 1 1 0 2H7a1 1 0 0 1 0-2ZM3 6.75A1.75 1.75 0 1 0 3 10.25 1.75 1.75 0 0 0 3 6.75Zm0 5A1.75 1.75 0 1 0 3 15.25 1.75 1.75 0 0 0 3 11.75Z"/>
+      </svg>
+      <span className="text-xs">Alle woningen</span>
     </button>
+
+    {/* Ingepland */}
     <button
       onClick={() => setActiveTab("scheduled")}
       aria-pressed={activeTab === "scheduled"}
-      className={`py-3 text-sm ${activeTab==='scheduled' ? 'font-semibold text-slate-900' : 'text-slate-600'}`}
+      className={`flex flex-col items-center justify-center gap-1 py-2 ${activeTab==='scheduled' ? 'text-slate-900 font-semibold' : 'text-slate-600'}`}
     >
-      Ingepland
+      {/* calendar */}
+      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M7 2a1 1 0 0 1 1 1v1h8V3a1 1 0 1 1 2 0v1h1a3 3 0 0 1 3 3v11a3 3 0 0 1-3 3H5a3 3 0 0 1-3-3V7a3 3 0 0 1 3-3h1V3a1 1 0 0 1 1-1Zm13 8H4v8a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-8ZM5 9h14V7a1 1 0 0 0-1-1h-1v1a1 1 0 1 1-2 0V6H8v1a1 1 0 1 1-2 0V6H5a1 1 0 0 0-1 1v2Z"/>
+      </svg>
+      <span className="text-xs">Ingepland</span>
     </button>
+
+    {/* Reviews */}
     <button
       onClick={() => setActiveTab("reviews")}
       aria-pressed={activeTab === "reviews"}
-      className={`py-3 text-sm ${activeTab==='reviews' ? 'font-semibold text-slate-900' : 'text-slate-600'}`}
+      className={`flex flex-col items-center justify-center gap-1 py-2 ${activeTab==='reviews' ? 'text-slate-900 font-semibold' : 'text-slate-600'}`}
     >
-      Reviews
+      {/* star */}
+      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M12 3.5 9.6 9H4.5l4.2 3.1L7.5 17 12 14.2 16.5 17l-1.2-4.9 4.2-3.1h-5.1L12 3.5Z"/>
+      </svg>
+      <span className="text-xs">Reviews</span>
     </button>
   </div>
 </nav>
