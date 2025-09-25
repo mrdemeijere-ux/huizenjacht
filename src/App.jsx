@@ -187,9 +187,9 @@ function SmartLinkPreview({ url }) {
     return (
       <a href={url} target="_blank" rel="noopener noreferrer" className="flex gap-3 rounded-xl border bg-white hover:bg-slate-50 transition px-3 py-3">
         {meta.image ? (
-          <img src={meta.image} alt="" className="h-16 w-24 rounded-lg object-cover border" />
+          <img src={meta.image} alt="" className="h-16 w-24 rounded-lg object-cover border aspect-[3/2]" />
         ) : (
-          <div className="h-16 w-24 rounded-lg bg-slate-100 border flex items-center justify-center text-slate-400 text-xs">{hostInitial(parts.host)}</div>
+          <div className="h-16 w-24 rounded-lg bg-slate-100 border flex items-center justify-center text-slate-400 text-xs aspect-[3/2]">{hostInitial(parts.host)}</div>
         )}
         <div className="min-w-0">
           <div className="truncate text-sm font-semibold">{meta.title || parts.host}</div>
@@ -488,13 +488,13 @@ const [myVotes, setMyVotes] = useState({}); // { [itemId]: 1 | -1 | 0 }
 
   // ===================== Render =====================
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white text-slate-900 pb-24">
+    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white text-slate-900 pb-28 sm:pb-24">
       <TopStatusBar liveStatus={liveStatus} />
       <div className="mx-auto max-w-6xl p-6">
         <header className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <h1 className="text-2xl font-bold">Huizenjacht – MVP</h1>
-            <p className="text-sm text-slate-600">Beheer bezichtigingen, makelaars en routes. Realtime sync via Firebase.</p>
+            <p className="text-sm text-slate-600 line-clamp-3">Beheer bezichtigingen, makelaars en routes. Realtime sync via Firebase.</p>
           </div>
         </header>
 
@@ -642,10 +642,10 @@ const [myVotes, setMyVotes] = useState({}); // { [itemId]: 1 | -1 | 0 }
           {visible.map((it, idx) => (
             <article key={it.id} className="rounded-2xl border bg-white p-4 shadow-sm">
               <div className="flex flex-col gap-3">
-                <div className="grid gap-3 sm:grid-cols-[1fr,auto]">
+                <div className="grid gap-3 sm:grid-cols-[1fr,240px]">
                   <div className="grow">
                     <div className="flex flex-wrap items-center gap-2 min-w-0">
-                      <h3 className="text-lg font-semibold">{it.title || "(Geen titel)"}</h3>
+                      <h3 className="text-lg font-semibold line-clamp-1">{it.title || "(Geen titel)"}</h3>
                       <span className={badgeClass(it.status)}>{STATUS_OPTIONS.find((s) => s.value === it.status)?.label || it.status}</span>
                       {it.url && <LinkChip url={it.url} />}
                       {Number(it.price) > 0 && (<span className="ml-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">{formatEUR(it.price)}</span>)}
@@ -656,9 +656,9 @@ const [myVotes, setMyVotes] = useState({}); // { [itemId]: 1 | -1 | 0 }
                       {[it.postalCode, it.city].filter(Boolean).join(" ")}
                       {it.country ? `, ${it.country}` : ""}
                     </p>
-                    {it.agencyName && (<p className="text-xs text-slate-600">Makelaardij: {it.agencyName}</p>)}
+                    {it.agencyName && (<p className="text-xs text-slate-600 line-clamp-3">Makelaardij: {it.agencyName}</p>)}
                     {(it.agentName || it.agentPhone || it.agentEmail) && (
-                      <p className="text-xs text-slate-600">Makelaar: {[it.agentName, it.agentPhone, it.agentEmail].filter(Boolean).join(" · ")}</p>
+                      <p className="text-xs text-slate-600 line-clamp-3">Makelaar: {[it.agentName, it.agentPhone, it.agentEmail].filter(Boolean).join(" · ")}</p>
                     )}
 
                     {/* Inline wijzigen */}
@@ -671,7 +671,7 @@ const [myVotes, setMyVotes] = useState({}); // { [itemId]: 1 | -1 | 0 }
                       <input type="datetime-local" className="rounded-lg border px-2 py-1 text-xs w-full sm:w-auto min-w-0 max-w-full appearance-none" value={it.viewingAt || ""} onChange={(e) => updateItem(it.id, { viewingAt: e.target.value })} />
                       {it.viewingAt && (<span className="text-xs text-slate-600">({formatViewing(it.viewingAt)})</span>)}
                     </div>
-                    {it.notes && <p className="mt-2 text-sm text-slate-600">🗒️ {it.notes}</p>}
+                    {it.notes && <p className="mt-2 text-sm text-slate-600 line-clamp-3">🗒️ {it.notes}</p>}
                   </div>
 
                   <div className="flex flex-wrap items-start justify-start gap-2 self-start sm:flex-nowrap sm:justify-end sm:min-w-max sm:whitespace-nowrap">
@@ -726,10 +726,10 @@ const [myVotes, setMyVotes] = useState({}); // { [itemId]: 1 | -1 | 0 }
           {scheduledVisible.map((it) => (
             <article key={`sched-${it.id}`} className="rounded-2xl border bg-white p-4 shadow-sm">
               <div className="flex flex-col gap-3">
-                <div className="grid gap-3 sm:grid-cols-[1fr,auto]">
+                <div className="grid gap-3 sm:grid-cols-[1fr,240px]">
                   <div className="grow">
                     <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="text-lg font-semibold">{it.title || "(Geen titel)"}</h3>
+                      <h3 className="text-lg font-semibold line-clamp-1">{it.title || "(Geen titel)"}</h3>
                       <span className={badgeClass(it.status)}>{STATUS_OPTIONS.find((s) => s.value === it.status)?.label || it.status}</span>
                       {it.url && <LinkChip url={it.url} />}
                       {Number(it.price) > 0 && (<span className="ml-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">{formatEUR(it.price)}</span>)}
@@ -791,10 +791,10 @@ const [myVotes, setMyVotes] = useState({}); // { [itemId]: 1 | -1 | 0 }
           {items.map((it) => (
             <article key={`rev-${it.id}`} className="rounded-2xl border bg-white p-4 shadow-sm">
               <div className="flex flex-col gap-3">
-                <div className="grid gap-3 sm:grid-cols-[1fr,auto]">
+                <div className="grid gap-3 sm:grid-cols-[1fr,240px]">
                   <div className="grow">
                     <div className="flex flex-wrap items-center gap-2 min-w-0">
-                      <h3 className="text-lg font-semibold">{it.title || "(Geen titel)"}</h3>
+                      <h3 className="text-lg font-semibold line-clamp-1">{it.title || "(Geen titel)"}</h3>
                       <span className={badgeClass(it.status)}>{STATUS_OPTIONS.find((s) => s.value === it.status)?.label || it.status}</span>
                       {it.url && <LinkChip url={it.url} />}
                       {Number(it.price) > 0 && (<span className="ml-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">{formatEUR(it.price)}</span>)}
@@ -852,7 +852,7 @@ const [myVotes, setMyVotes] = useState({}); // { [itemId]: 1 | -1 | 0 }
       </div>
 
       {/* Onderste tabbar (mobielvriendelijk) */}
-      <nav className="fixed bottom-0 left-0 right-0 z-40 border-t bg-white/95 backdrop-blur">
+      <nav className="fixed bottom-0 left-0 right-0 z-40 border-t bg-white/95/95 backdrop-blur pb-[max(0.25rem,env(safe-area-inset-bottom))]">
   <div className="mx-auto max-w-6xl grid grid-cols-4">
     {/* Nieuwe woning */}
     <button
