@@ -162,20 +162,23 @@ function LinkChip({ url }) {
 }
 
 // Rijke link preview via serverless endpoint (optioneel)
-function SmartLinkPreview({ url, status, price }) {
+function SmartLinkPreview({ item, url, status, price, onUpdate, onOpenEditor }) {
   if (!url) return null;
 
   const [meta, setMeta] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
+  const [statusOpen, setStatusOpen] = useState(false);
+  const [editingPrice, setEditingPrice] = useState(false);
+  const [tempPrice, setTempPrice] = useState(price ?? "");
+
   const endpoint = import.meta?.env?.VITE_LINK_PREVIEW_ENDPOINT;
   const parts = getUrlParts(url || "");
 
   useEffect(() => {
     let alive = true;
-    setError(null);
-    setMeta(null);
+    setError(null); setMeta(null);
     if (!endpoint || !url) return;
     setLoading(true);
     const target = `${endpoint}?url=${encodeURIComponent(url)}`;
@@ -206,46 +209,99 @@ function SmartLinkPreview({ url, status, price }) {
   };
   const priceText = fmtPrice(price);
 
+  const commitPrice = () => {
+    const v = String(tempPrice).replace(',', '.').trim();
+    const num = Number(v);
+    if (isFinite(num) && num >= 0) onUpdate?.({ price: num });
+    setEditingPrice(false);
+  };
+
   return (
-    <a href={url} target="_blank" rel="noopener noreferrer" className="block">
-      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white hover:shadow-sm transition">
-        {/* Image area */}
-        <div className="relative w-full aspect-[4/3] bg-slate-100">
-          {meta?.image ? (
-            <img src={meta.image} alt="" className="absolute inset-0 h-full w-full object-cover" loading="lazy" />
-          ) : (
-            <div className="absolute inset-0 grid place-items-center text-slate-400 text-xs">
-              {subtitle}
-            </div>
-          )}
+    <div className="group relative">
+      <a href={url} target="_blank" rel="noopener noreferrer" className="block">
+        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white hover:shadow-sm transition">
+          {/* Image area */}
+          <div className="relative w-full aspect-[4/3] bg-slate-100">
+            {meta?.image ? (
+              <img src={meta.image} alt="" className="absolute inset-0 h-full w-full object-cover" loading="lazy" />
+            ) : (
+              <div className="absolute inset-0 grid place-items-center text-slate-400 text-xs">{subtitle}</div>
+            )}
 
-          {/* Price badge (bottom-left) */}
-          {priceText && (
-            <span className="absolute bottom-2 left-2 rounded-full bg-emerald-600/90 text-white text-xs px-2 py-1">
-              {priceText}
-            </span>
-          )}
+            {/* Editor button (top-right) */}
+            <button
+              type="button"
+              onClick={(e)=>{ e.preventDefault(); onOpenEditor?.(); }}
+              className="absolute top-2 right-2 rounded-full bg-white/95 border px-2 py-1 text-xs shadow-sm hover:bg-white"
+              aria-label="Bewerken"
+            >
+              ⋯
+            </button>
 
-          {/* Status badge (bottom-right) */}
-          {status && (
-            <span className="absolute bottom-2 right-2 rounded-full bg-blue-600/90 text-white text-xs px-2 py-1">
+            {/* Price badge (bottom-left): toggles to input */}
+            {!editingPrice && priceText && (
+              <button
+                type="button"
+                onClick={(e)=>{ e.preventDefault(); setTempPrice(String(price || '')); setEditingPrice(true); }}
+                className="absolute bottom-2 left-2 rounded-full bg-emerald-600/90 text-white text-xs px-2 py-1"
+              >
+                {priceText}
+              </button>
+            )}
+            {editingPrice && (
+              <form
+                onSubmit={(e)=>{ e.preventDefault(); commitPrice(); }}
+                className="absolute bottom-2 left-2"
+              >
+                <input
+                  autoFocus
+                  className="rounded-full bg-white/95 border px-2 py-1 text-xs w-24 shadow-sm"
+                  value={tempPrice}
+                  inputMode="decimal"
+                  onChange={(e)=>setTempPrice(e.target.value)}
+                  onBlur={commitPrice}
+                />
+              </form>
+            )}
+
+            {/* Status badge (bottom-right): opens tiny popover */}
+            <button
+              type="button"
+              onClick={(e)=>{ e.preventDefault(); setStatusOpen((v)=>!v); }}
+              className="absolute bottom-2 right-2 rounded-full bg-blue-600/90 text-white text-xs px-2 py-1"
+            >
               {statusLabel(status)}
-            </span>
-          )}
-        </div>
+            </button>
+            {statusOpen && (
+              <div className="absolute bottom-10 right-2 rounded-xl border bg-white p-1 shadow-lg z-10">
+                <ul className="min-w-[140px] text-sm">
+                  {typeof STATUS_OPTIONS !== 'undefined' && STATUS_OPTIONS.map(o => (
+                    <li key={o.value}>
+                      <button
+                        type="button"
+                        className="w-full text-left px-3 py-2 rounded-lg hover:bg-slate-50"
+                        onClick={(e)=>{ e.preventDefault(); onUpdate?.({ status: o.value }); setStatusOpen(false); }}
+                      >
+                        {o.label}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
 
-        {/* Text area */}
-        <div className="p-3">
-          <div className="text-sm font-semibold leading-snug line-clamp-2">{title}</div>
-          {description && (
-            <div className="mt-0.5 text-xs text-slate-600 leading-tight line-clamp-2">
-              {description}
-            </div>
-          )}
-          <div className="mt-1 text-[11px] text-slate-500 truncate">{subtitle}</div>
+          {/* Text area */}
+          <div className="p-3">
+            <div className="text-sm font-semibold leading-snug line-clamp-2">{title}</div>
+            {description && (
+              <div className="mt-0.5 text-xs text-slate-600 leading-tight line-clamp-2">{description}</div>
+            )}
+            <div className="mt-1 text-[11px] text-slate-500 truncate">{subtitle}</div>
+          </div>
         </div>
-      </div>
-    </a>
+      </a>
+    </div>
   );
 }
 
@@ -640,6 +696,15 @@ const [myVotes, setMyVotes] = useState({}); // { [itemId]: 1 | -1 | 0 }
           </form>
         </section>
 
+        {/* Editor Sheet */}
+        {editorItem && (
+          <PropertyEditor
+            item={editorItem}
+            onClose={()=>setEditorItem(null)}
+            onUpdate={(patch)=>updateItem(editorItem.id, patch)}
+          />
+        )}
+
         {/* Filters/Sortering */}
         <section className={`${activeTab==='all' ? '' : 'hidden'} mb-3`}>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
@@ -669,7 +734,7 @@ const [myVotes, setMyVotes] = useState({}); // { [itemId]: 1 | -1 | 0 }
       </div>
     )}
     {visible.map((it) => (
-      <SmartLinkPreview key={it.id} url={it.url} status={it.status} price={it.price} />
+      <SmartLinkPreview key={it.id} item={it} url={it.url} status={it.status} price={it.price} onUpdate={(patch)=>updateItem(it.id, patch)} onOpenEditor={()=>setEditorItem(it)} />
     ))}
   </div>
 </section>
@@ -857,6 +922,83 @@ const [myVotes, setMyVotes] = useState({}); // { [itemId]: 1 | -1 | 0 }
     </button>
   </div>
 </nav>
+    </div>
+  );
+}
+
+
+function PropertyEditor({ item, onClose, onUpdate }) {
+  const [form, setForm] = useState({ ...item });
+
+  const save = (patch) => { onUpdate?.(patch); };
+
+  return (
+    <div className="fixed inset-0 z-50">
+      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
+      <aside className="absolute right-0 top-0 h-full w-full sm:w-[520px] bg-white shadow-xl rounded-t-2xl sm:rounded-none">
+        <header className="sticky top-0 z-10 border-b bg-white p-3 flex items-center justify-between">
+          <h3 className="text-base font-semibold truncate">{form.title || "(Geen titel)"}</h3>
+          <button className="rounded-lg border px-3 py-1.5 text-sm" onClick={onClose}>Sluiten</button>
+        </header>
+        <div className="p-4 space-y-4">
+          <div>
+            <label className="text-xs text-slate-600">Titel*</label>
+            <input
+              className="mt-1 w-full rounded-xl border px-3 py-2.5 text-sm"
+              value={form.title || ""}
+              onChange={(e)=>{ const v=e.target.value; setForm(f=>({...f,title:v})); save({title:v}); }}
+            />
+          </div>
+          <div>
+            <label className="text-xs text-slate-600">Link*</label>
+            <input
+              className="mt-1 w-full rounded-xl border px-3 py-2.5 text-sm"
+              value={form.url || ""}
+              onChange={(e)=>{ const v=e.target.value; setForm(f=>({...f,url:v})); save({url:v}); }}
+            />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-slate-600">Status</label>
+              <select
+                className="mt-1 w-full rounded-xl border px-3 py-2.5 text-sm"
+                value={form.status || ""}
+                onChange={(e)=>{ const v=e.target.value; setForm(f=>({...f,status:v})); save({status:v}); }}
+              >
+                <option value="">—</option>
+                {typeof STATUS_OPTIONS !== 'undefined' && STATUS_OPTIONS.map(o=>(<option key={o.value} value={o.value}>{o.label}</option>))}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-slate-600">Prijs</label>
+              <input
+                inputMode="decimal"
+                className="mt-1 w-full rounded-xl border px-3 py-2.5 text-sm"
+                value={form.price ?? ""}
+                onChange={(e)=>{ const v=e.target.value.replace(',', '.'); setForm(f=>({...f,price:v})); save({price:Number(v)||0}); }}
+              />
+            </div>
+          </div>
+          <div>
+            <label className="text-xs text-slate-600">Bezichtiging</label>
+            <input
+              type="datetime-local"
+              className="mt-1 w-full rounded-xl border px-3 py-2.5 text-sm"
+              value={form.viewingAt || ""}
+              onChange={(e)=>{ const v=e.target.value; setForm(f=>({...f,viewingAt:v})); save({viewingAt:v}); }}
+            />
+          </div>
+          <div>
+            <label className="text-xs text-slate-600">Notities</label>
+            <textarea
+              className="mt-1 w-full rounded-xl border px-3 py-2.5 text-sm"
+              rows={4}
+              value={form.notes || ""}
+              onChange={(e)=>{ const v=e.target.value; setForm(f=>({...f,notes:v})); save({notes:v}); }}
+            />
+          </div>
+        </div>
+      </aside>
     </div>
   );
 }
