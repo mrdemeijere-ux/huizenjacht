@@ -693,14 +693,39 @@ export default function App() {
         </section>
       </div>
 
-      {/* Onderste tabbar */}
-      <nav className="fixed bottom-0 left-0 right-0 z-40 border-t bg-white/95 backdrop-blur">
-        <div className="mx-auto max-w-6xl grid grid-cols-3">
-          <button onClick={() => setActiveTab("new")} className={`py-3 text-sm ${activeTab==='new' ? 'font-semibold text-slate-900' : 'text-slate-600'}`}>Nieuwe woning</button>
-          <button onClick={() => setActiveTab("all")} className={`py-3 text-sm ${activeTab==='all' ? 'font-semibold text-slate-900' : 'text-slate-600'}`}>Alle woningen</button>
-          <button onClick={() => setActiveTab("scheduled")} className={`py-3 text-sm ${activeTab==='scheduled' ? 'font-semibold text-slate-900' : 'text-slate-600'}`}>Ingepland</button>
-        </div>
-      </nav>
+{/* Onderste tabbar (mobielvriendelijk) */}
+<nav className="fixed bottom-0 left-0 right-0 z-40 border-t bg-white/95 backdrop-blur">
+  <div className="mx-auto max-w-6xl grid grid-cols-4">
+    <button
+      onClick={() => setActiveTab("new")}
+      aria-pressed={activeTab === "new"}
+      className={`py-3 text-sm ${activeTab==='new' ? 'font-semibold text-slate-900' : 'text-slate-600'}`}
+    >
+      Nieuwe woning
+    </button>
+    <button
+      onClick={() => setActiveTab("all")}
+      aria-pressed={activeTab === "all"}
+      className={`py-3 text-sm ${activeTab==='all' ? 'font-semibold text-slate-900' : 'text-slate-600'}`}
+    >
+      Alle woningen
+    </button>
+    <button
+      onClick={() => setActiveTab("scheduled")}
+      aria-pressed={activeTab === "scheduled"}
+      className={`py-3 text-sm ${activeTab==='scheduled' ? 'font-semibold text-slate-900' : 'text-slate-600'}`}
+    >
+      Ingepland
+    </button>
+    <button
+      onClick={() => setActiveTab("reviews")}
+      aria-pressed={activeTab === "reviews"}
+      className={`py-3 text-sm ${activeTab==='reviews' ? 'font-semibold text-slate-900' : 'text-slate-600'}`}
+    >
+      Reviews
+    </button>
+  </div>
+</nav>
     </div>
   );
 }
