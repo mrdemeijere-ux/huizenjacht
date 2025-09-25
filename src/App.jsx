@@ -154,72 +154,80 @@ function LinkChip({ url }) {
   if (!url) return null;
   const parts = getUrlParts(url);
   return (
-    <a href={url} target="_blank" rel="noopener noreferrer" className="inline-flex max-w-[180px] items-center gap-1 rounded-full border px-2 py-0.5 text-xs hover:bg-slate-50 min-h-[44px]" title={url}>
-      <span className="flex h-4 w-4 items-center justify-center rounded-full bg-slate-200 text-[10px] font-bold text-slate-700 min-h-[44px]">{hostInitial(parts.host)}</span>
-      <span className="truncate min-h-[44px]">{parts.host}</span>
+    <a href={url} target="_blank" rel="noopener noreferrer" className="inline-flex max-w-[180px] items-center gap-1 rounded-full border px-2 py-0.5 text-xs hover:bg-slate-50" title={url}>
+      <span className="flex h-4 w-4 items-center justify-center rounded-full bg-slate-200 text-[10px] font-bold text-slate-700">{hostInitial(parts.host)}</span>
+      <span className="truncate">{parts.host}</span>
     </a>
   );
 }
 
 // Rijke link preview via serverless endpoint (optioneel)
 function SmartLinkPreview({ url }) {
+  if (!url) return null;
+
   const [meta, setMeta] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+
   const endpoint = import.meta?.env?.VITE_LINK_PREVIEW_ENDPOINT;
   const parts = getUrlParts(url || "");
 
   useEffect(() => {
     let alive = true;
-    setError(null); setMeta(null);
+    setError(null);
+    setMeta(null);
     if (!endpoint || !url) return;
     setLoading(true);
     const target = `${endpoint}?url=${encodeURIComponent(url)}`;
     fetch(target)
-      .then(async (r) => { if (!alive) return; if (!r.ok) { setError(`HTTP ${r.status}`); return; } const data = await r.json().catch(() => null); if (!alive) return; if (data && (data.title || data.image || data.description)) setMeta(data); })
+      .then(async (r) => {
+        if (!alive) return;
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        const data = await r.json();
+        // Basic sanity: only accept if has at least a title/description/image
+        if (data && (data.title || data.description || data.image)) {
+          setMeta(data);
+        }
+      })
       .catch((e) => alive && setError(e?.message || String(e)))
       .finally(() => alive && setLoading(false));
     return () => { alive = false; };
   }, [endpoint, url]);
 
-  if (!endpoint || !url) return null;
-  if (meta) {
-    return (
-      <a href={url} target="_blank" rel="noopener noreferrer" className="flex gap-3 rounded-xl border bg-white hover:bg-slate-50 transition px-3 py-3 min-h-[44px]">
-        {meta.image ? (
-          <img src={meta.image} alt="" className="h-16 w-24 rounded-lg object-cover border aspect-[3/2] min-h-[44px]" />
-        ) : (
-          <div className="h-16 w-24 rounded-lg bg-slate-100 border flex items-center justify-center text-slate-400 text-xs aspect-[3/2] min-h-[44px]">{hostInitial(parts.host)}</div>
-        )}
-        <div className="min-w-0 min-h-[44px]">
-          <div className="truncate text-sm font-semibold min-h-[44px]">{meta.title || parts.host}</div>
-          {meta.description && (<div className="mt-0.5 line-clamp-2 text-xs text-slate-600 min-h-[44px]">{meta.description}</div>)}
-          <div className="mt-1 text-[11px] text-slate-500 truncate min-h-[44px]">{meta.siteName || parts.host}</div>
-        </div>
-      </a>
-    );
-  }
-  if (loading) {
-    return (
-      <div className="flex items-center gap-3 rounded-xl border bg-slate-50 px-3 py-2 animate-pulse min-h-[44px]">
-        <div className="h-6 w-6 rounded-full bg-slate-200 min-h-[44px]" />
-        <div className="flex-1 space-y-1 min-h-[44px]">
-          <div className="h-3 w-40 bg-slate-200 rounded min-h-[44px]" />
-          <div className="h-2 w-24 bg-slate-200 rounded min-h-[44px]" />
-        </div>
-      </div>
-    );
-  }
+  // Render a large card (image on top, text below), similar to marketplace tiles
+  const title = meta?.title || parts.host || "Link";
+  const subtitle = meta?.siteName || parts.host;
+  const description = meta?.description;
+
   return (
-    <a href={url} target="_blank" rel="noopener noreferrer" className="flex items-center justify-between gap-3 rounded-xl border bg-slate-50 px-3 py-2 min-h-[44px]" title={error ? `Preview niet beschikbaar: ${error}` : url}>
-      <div className="flex min-w-0 items-center gap-3 min-h-[44px]">
-        <div className="h-6 w-6 rounded-md bg-slate-200 flex items-center justify-center text-[10px] font-bold text-slate-700 min-h-[44px]">{hostInitial(parts.host)}</div>
-        <div className="min-w-0 min-h-[44px]">
-          <div className="truncate text-sm font-medium min-h-[44px]">{parts.host || "Open link"}</div>
-          {parts.path && <div className="truncate text-[11px] text-slate-600 min-h-[44px]">{parts.path}</div>}
+    <a href={url} target="_blank" rel="noopener noreferrer" className="block">
+      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+        {/* Image area */}
+        <div className="relative w-full aspect-[4/3] bg-slate-100">
+          {meta?.image ? (
+            <img
+              src={meta.image}
+              alt=""
+              className="absolute inset-0 h-full w-full object-cover"
+              loading="lazy"
+            />
+          ) : (
+            <div className="absolute inset-0 grid place-items-center text-slate-400 text-xs">
+              {subtitle}
+            </div>
+          )}
+        </div>
+        {/* Text area */}
+        <div className="p-3">
+          <div className="text-sm font-semibold leading-snug line-clamp-2">{title}</div>
+          {description && (
+            <div className="mt-0.5 text-xs text-slate-600 leading-tight line-clamp-2">
+              {description}
+            </div>
+          )}
+          <div className="mt-1 text-[11px] text-slate-500 truncate">{subtitle}</div>
         </div>
       </div>
-      <span className="rounded-lg border px-2 py-1 text-[11px] text-slate-700 min-h-[44px]">Open</span>
     </a>
   );
 }
@@ -228,17 +236,17 @@ function StarRating({ value = 0, onChange, size = "md", label, hint }) {
   const stars = [1, 2, 3, 4, 5];
   const cls = size === "sm" ? "text-sm" : size === "lg" ? "text-xl" : "text-base";
   return (
-    <div className="flex items-start gap-2 min-w-0 min-h-[44px]">
-      {label && <span className="w-40 sm:w-56 md:w-64 shrink-0 text-sm text-slate-700 leading-snug min-h-[44px]">{label}</span>}
-      <div className="flex items-center flex-shrink-0 min-h-[44px]">
+    <div className="flex items-start gap-2 min-w-0">
+      {label && <span className="w-40 sm:w-56 md:w-64 shrink-0 text-sm text-slate-700 leading-snug">{label}</span>}
+      <div className="flex items-center flex-shrink-0">
         {stars.map((n) => (
           <button key={n} type="button" aria-label={`${label || "Score"} ${n} ster${n > 1 ? "ren" : ""}`} className={`${cls} leading-none px-0.5`} onClick={() => onChange?.(n)} onKeyDown={(e) => { if (e.key === "ArrowRight") onChange?.(Math.min(5, (value || 0) + 1)); if (e.key === "ArrowLeft") onChange?.(Math.max(1, (value || 0) - 1)); }}>
             <span className={n <= (value || 0) ? "" : "opacity-30"}>★</span>
           </button>
         ))}
       </div>
-      {value ? (<span className="text-xs text-slate-600 min-h-[44px]">{value}/5</span>) : (<span className="text-xs text-slate-400 min-h-[44px]">–</span>)}
-      {hint && <span className="ml-2 text-[11px] text-slate-500 min-h-[44px]">{hint}</span>}
+      {value ? (<span className="text-xs text-slate-600">{value}/5</span>) : (<span className="text-xs text-slate-400">–</span>)}
+      {hint && <span className="ml-2 text-[11px] text-slate-500">{hint}</span>}
     </div>
   );
 }
@@ -252,9 +260,9 @@ function averageRating(r) {
 
 function TopStatusBar({ liveStatus }) {
   return (
-    <div className="sticky top-0 z-50 w-full border-b bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/60 min-h-[44px]">
-      <div className="mx-auto max-w-6xl px-6 py-2 text-xs text-slate-700 flex items-center justify-between min-h-[44px]">
-        <div>⚡ Sync: <span className="font-medium min-h-[44px]">{liveStatus}</span> · Opslag: Firebase</div>
+    <div className="sticky top-0 z-50 w-full border-b bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/60">
+      <div className="mx-auto max-w-6xl px-6 py-2 text-xs text-slate-700 flex items-center justify-between">
+        <div>⚡ Sync: <span className="font-medium">{liveStatus}</span> · Opslag: Firebase</div>
       </div>
     </div>
   );
@@ -298,8 +306,6 @@ async function openOsmApprox(it, updateItem) {
 
 // ===================== App =====================
 export default function App() {
-  const [showFilters, setShowFilters] = useState(false);
-
   const [items, setItems] = useState([]);
   const [form, setForm] = useState(emptyForm());
   const [editingId, setEditingId] = useState(null);
@@ -490,25 +496,25 @@ const [myVotes, setMyVotes] = useState({}); // { [itemId]: 1 | -1 | 0 }
 
   // ===================== Render =====================
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white text-slate-900 pb-28 sm:pb-24 min-h-[44px]">
+    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white text-slate-900 pb-24">
       <TopStatusBar liveStatus={liveStatus} />
-      <div className="mx-auto max-w-6xl p-6 min-h-[44px]">
-        <header className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between min-h-[44px]">
+      <div className="mx-auto max-w-6xl p-6">
+        <header className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h1 className="text-2xl font-bold min-h-[44px]">Huizenjacht – MVP</h1>
-            <p className="text-sm text-slate-600 line-clamp-3 min-h-[44px]">Beheer bezichtigingen, makelaars en routes. Realtime sync via Firebase.</p>
+            <h1 className="text-2xl font-bold">Huizenjacht – MVP</h1>
+            <p className="text-sm text-slate-600">Beheer bezichtigingen, makelaars en routes. Realtime sync via Firebase.</p>
           </div>
         </header>
 
         {syncError && (
-          <div className="mb-4 rounded-xl border border-rose-300 bg-rose-50 p-3 text-sm text-rose-900 min-h-[44px]">
-            <div className="font-semibold min-h-[44px]">Sync fout</div>
-            <div className="mt-1 min-h-[44px]"><code className="rounded bg-white/60 px-1 min-h-[44px]">{syncError.code || "unknown"}</code> · {syncError.message || String(syncError)}</div>
+          <div className="mb-4 rounded-xl border border-rose-300 bg-rose-50 p-3 text-sm text-rose-900">
+            <div className="font-semibold">Sync fout</div>
+            <div className="mt-1"><code className="rounded bg-white/60 px-1">{syncError.code || "unknown"}</code> · {syncError.message || String(syncError)}</div>
           </div>
         )}
 
         {/* Tabs boven-form */}
-        <nav className="mb-4 flex gap-2 text-sm min-h-[44px]">
+        <nav className="mb-4 flex gap-2 text-sm">
           <button onClick={() => setActiveTab("new")} className={`rounded-xl border px-3 py-2 ${activeTab==='new' ? 'bg-slate-900 text-white' : 'bg-white'}`}>Nieuwe woning</button>
           <button onClick={() => setActiveTab("all")} className={`rounded-xl border px-3 py-2 ${activeTab==='all' ? 'bg-slate-900 text-white' : 'bg-white'}`}>Alle woningen</button>
           <button onClick={() => setActiveTab("scheduled")} className={`rounded-xl border px-3 py-2 ${activeTab==='scheduled' ? 'bg-slate-900 text-white' : 'bg-white'}`}>Ingepland</button>
@@ -517,118 +523,117 @@ const [myVotes, setMyVotes] = useState({}); // { [itemId]: 1 | -1 | 0 }
 
         {/* Formulier */}
         <section className={`mb-8 rounded-2xl border bg-white p-4 shadow-sm ${activeTab==='new' ? '' : 'hidden'}`}>
-          <h2 className="mb-3 text-lg font-semibold min-h-[44px]">{isEditing ? "Woning bewerken" : "Nieuwe woning toevoegen"}</h2>
-          <form onSubmit={isEditing ? (e) => { e.preventDefault(); saveEdit(); } : handleSubmit} className="grid grid-cols-1 gap-4 md:grid-cols-2 min-h-[44px]">
+          <h2 className="mb-3 text-lg font-semibold">{isEditing ? "Woning bewerken" : "Nieuwe woning toevoegen"}</h2>
+          <form onSubmit={isEditing ? (e) => { e.preventDefault(); saveEdit(); } : handleSubmit} className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div>
-              <label className="text-sm font-medium min-h-[44px]">Titel / Naam woning<span className="text-rose-600 min-h-[44px]">*</span></label>
+              <label className="text-sm font-medium">Titel / Naam woning<span className="text-rose-600">*</span></label>
               <input className={`mt-1 w-full rounded-xl border px-3 py-2 ${errors.title ? "border-rose-400" : ""}`} placeholder="Bijv. Charmehuisje bij Dijon" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
-              {errors.title && <p className="text-xs text-rose-600 min-h-[44px]">{errors.title}</p>}
+              {errors.title && <p className="text-xs text-rose-600">{errors.title}</p>}
             </div>
             <div>
-              <label className="text-sm font-medium min-h-[44px]">Link naar woning<span className="text-rose-600 min-h-[44px]">*</span></label>
+              <label className="text-sm font-medium">Link naar woning<span className="text-rose-600">*</span></label>
               <input className={`mt-1 w-full rounded-xl border px-3 py-2 ${errors.url ? "border-rose-400" : ""}`} placeholder="https://..." value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} />
-              {errors.url && <p className="text-xs text-rose-600 min-h-[44px]">{errors.url}</p>}
+              {errors.url && <p className="text-xs text-rose-600">{errors.url}</p>}
             </div>
 
-            <div className="md:col-span-2 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 min-h-[44px]">
+            <div className="md:col-span-2 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <div>
-                <label className="text-sm font-medium min-h-[44px]">Adres<span className="text-rose-600 min-h-[44px]">*</span></label>
+                <label className="text-sm font-medium">Adres<span className="text-rose-600">*</span></label>
                 <input className={`mt-1 w-full rounded-xl border px-3 py-2 ${errors.address ? "border-rose-400" : ""}`} placeholder="Rue de ... 12" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
-                {errors.address && <p className="text-xs text-rose-600 min-h-[44px]">{errors.address}</p>}
+                {errors.address && <p className="text-xs text-rose-600">{errors.address}</p>}
               </div>
               <div>
-                <label className="text-sm font-medium min-h-[44px]">Postcode<span className="text-rose-600 opacity-0 min-h-[44px]">*</span></label>
-                <input className="mt-1 w-full rounded-xl border px-3 py-2 min-h-[44px]" placeholder="75001" value={form.postalCode} onChange={(e) => setForm({ ...form, postalCode: e.target.value })} />
+                <label className="text-sm font-medium">Postcode<span className="text-rose-600 opacity-0">*</span></label>
+                <input className="mt-1 w-full rounded-xl border px-3 py-2" placeholder="75001" value={form.postalCode} onChange={(e) => setForm({ ...form, postalCode: e.target.value })} />
               </div>
               <div>
-                <label className="text-sm font-medium min-h-[44px]">Plaats<span className="text-rose-600 min-h-[44px]">*</span></label>
+                <label className="text-sm font-medium">Plaats<span className="text-rose-600">*</span></label>
                 <input className={`mt-1 w-full rounded-xl border px-3 py-2 ${errors.city ? "border-rose-400" : ""}`} placeholder="Paris" value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} />
-                {errors.city && <p className="text-xs text-rose-600 min-h-[44px]">{errors.city}</p>}
+                {errors.city && <p className="text-xs text-rose-600">{errors.city}</p>}
               </div>
               <div>
-                <label className="text-sm font-medium min-h-[44px]">Land</label>
-                <input className="mt-1 w-full rounded-xl border px-3 py-2 min-h-[44px]" value={form.country} onChange={(e) => setForm({ ...form, country: e.target.value })} />
+                <label className="text-sm font-medium">Land</label>
+                <input className="mt-1 w-full rounded-xl border px-3 py-2" value={form.country} onChange={(e) => setForm({ ...form, country: e.target.value })} />
               </div>
             </div>
 
             <div>
-              <label className="text-sm font-medium min-h-[44px]">Prijs (EUR)</label>
-              <input type="number" inputMode="decimal" className="mt-1 w-full rounded-xl border px-3 py-2 min-h-[44px]" placeholder="350000" value={form.price ?? ""} onChange={(e) => setForm({ ...form, price: e.target.value === "" ? "" : Number(e.target.value) })} />
-              <p className="text-xs text-slate-500 mt-1 min-h-[44px]">Vul een bedrag in zonder punten of €-teken, bijv. 350000.</p>
+              <label className="text-sm font-medium">Prijs (EUR)</label>
+              <input type="number" inputMode="decimal" className="mt-1 w-full rounded-xl border px-3 py-2" placeholder="350000" value={form.price ?? ""} onChange={(e) => setForm({ ...form, price: e.target.value === "" ? "" : Number(e.target.value) })} />
+              <p className="text-xs text-slate-500 mt-1">Vul een bedrag in zonder punten of €-teken, bijv. 350000.</p>
             </div>
 
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 min-h-[44px]">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
-                <label className="text-sm font-medium min-h-[44px]">GPS Latitude (opt.)</label>
-                <input className="mt-1 w-full rounded-xl border px-3 py-2 min-h-[44px]" placeholder="48.8566" value={form.lat} onChange={(e) => setForm({ ...form, lat: e.target.value })} />
+                <label className="text-sm font-medium">GPS Latitude (opt.)</label>
+                <input className="mt-1 w-full rounded-xl border px-3 py-2" placeholder="48.8566" value={form.lat} onChange={(e) => setForm({ ...form, lat: e.target.value })} />
               </div>
               <div>
-                <label className="text-sm font-medium min-h-[44px]">GPS Longitude (opt.)</label>
-                <input className="mt-1 w-full rounded-xl border px-3 py-2 min-h-[44px]" placeholder="2.3522" value={form.lng} onChange={(e) => setForm({ ...form, lng: e.target.value })} />
+                <label className="text-sm font-medium">GPS Longitude (opt.)</label>
+                <input className="mt-1 w-full rounded-xl border px-3 py-2" placeholder="2.3522" value={form.lng} onChange={(e) => setForm({ ...form, lng: e.target.value })} />
               </div>
             </div>
 
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-4 md:col-span-2 min-h-[44px]">
-              <div className="sm:col-span-2 min-h-[44px]">
-                <label className="text-sm font-medium min-h-[44px]">Makelaardij</label>
-                <input className="mt-1 w-full rounded-xl border px-3 py-2 min-h-[44px]" placeholder="Agence BelleMaison" value={form.agencyName} onChange={(e) => setForm({ ...form, agencyName: e.target.value })} />
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-4 md:col-span-2">
+              <div className="sm:col-span-2">
+                <label className="text-sm font-medium">Makelaardij</label>
+                <input className="mt-1 w-full rounded-xl border px-3 py-2" placeholder="Agence BelleMaison" value={form.agencyName} onChange={(e) => setForm({ ...form, agencyName: e.target.value })} />
               </div>
               <div>
-                <label className="text-sm font-medium min-h-[44px]">Makelaar naam</label>
-                <input className="mt-1 w-full rounded-xl border px-3 py-2 min-h-[44px]" placeholder="Mme Dupont" value={form.agentName} onChange={(e) => setForm({ ...form, agentName: e.target.value })} />
+                <label className="text-sm font-medium">Makelaar naam</label>
+                <input className="mt-1 w-full rounded-xl border px-3 py-2" placeholder="Mme Dupont" value={form.agentName} onChange={(e) => setForm({ ...form, agentName: e.target.value })} />
               </div>
               <div>
-                <label className="text-sm font-medium min-h-[44px]">Makelaar telefoon</label>
-                <input className="mt-1 w-full rounded-xl border px-3 py-2 min-h-[44px]" placeholder="+33 ..." value={form.agentPhone} onChange={(e) => setForm({ ...form, agentPhone: e.target.value })} />
+                <label className="text-sm font-medium">Makelaar telefoon</label>
+                <input className="mt-1 w-full rounded-xl border px-3 py-2" placeholder="+33 ..." value={form.agentPhone} onChange={(e) => setForm({ ...form, agentPhone: e.target.value })} />
               </div>
-              <div className="sm:col-span-2 min-h-[44px]">
-                <label className="text-sm font-medium min-h-[44px]">Makelaar e-mail</label>
-                <input className="mt-1 w-full rounded-xl border px-3 py-2 min-h-[44px]" placeholder="makelaar@bedrijf.fr" value={form.agentEmail} onChange={(e) => setForm({ ...form, agentEmail: e.target.value })} />
+              <div className="sm:col-span-2">
+                <label className="text-sm font-medium">Makelaar e-mail</label>
+                <input className="mt-1 w-full rounded-xl border px-3 py-2" placeholder="makelaar@bedrijf.fr" value={form.agentEmail} onChange={(e) => setForm({ ...form, agentEmail: e.target.value })} />
               </div>
-              <div className="sm:col-span-2 min-h-[44px]">
-                <label className="text-sm font-medium min-h-[44px]">Geplande bezichtiging (datum/tijd)</label>
-                <input type="datetime-local" className="mt-1 w-full max-w-full min-w-0 appearance-none rounded-xl border px-3 py-2 min-h-[44px]" value={form.viewingAt} onChange={(e) => setForm({ ...form, viewingAt: e.target.value })} />
-                <p className="mt-1 text-xs text-slate-500 min-h-[44px]">Tip: dit gebruikt je lokale tijdzone.</p>
+              <div className="sm:col-span-2">
+                <label className="text-sm font-medium">Geplande bezichtiging (datum/tijd)</label>
+                <input type="datetime-local" className="mt-1 w-full max-w-full min-w-0 appearance-none rounded-xl border px-3 py-2" value={form.viewingAt} onChange={(e) => setForm({ ...form, viewingAt: e.target.value })} />
+                <p className="mt-1 text-xs text-slate-500">Tip: dit gebruikt je lokale tijdzone.</p>
               </div>
             </div>
 
             <div>
-              <label className="text-sm font-medium min-h-[44px]">Status<span className="text-rose-600 min-h-[44px]">*</span></label>
+              <label className="text-sm font-medium">Status<span className="text-rose-600">*</span></label>
               <select className={`mt-1 w-full rounded-xl border px-3 py-2 ${errors.status ? "border-rose-400" : ""}`} value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
                 <option value="">— Kies status —</option>
                 {STATUS_OPTIONS.map((opt) => (<option key={opt.value} value={opt.value}>{opt.label}</option>))}
               </select>
-              {errors.status && <p className="text-xs text-rose-600 min-h-[44px]">{errors.status}</p>}
+              {errors.status && <p className="text-xs text-rose-600">{errors.status}</p>}
             </div>
 
             <div>
-              <label className="text-sm font-medium min-h-[44px]">Notities</label>
-              <textarea className="mt-1 w-full rounded-xl border px-3 py-2 min-h-[44px]" rows={2} placeholder="Parkeren bij achteringang, sleutel ophalen bij buur..." value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+              <label className="text-sm font-medium">Notities</label>
+              <textarea className="mt-1 w-full rounded-xl border px-3 py-2" rows={2} placeholder="Parkeren bij achteringang, sleutel ophalen bij buur..." value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
             </div>
 
-            <div className="md:col-span-2 flex items-center gap-2 pt-2 min-h-[44px]">
-              {!isEditing && (<button className="rounded-2xl bg-slate-900 px-4 py-2 text-white shadow hover:opacity-90 min-h-[44px]" type="submit">Toevoegen</button>)}
+            <div className="md:col-span-2 flex items-center gap-2 pt-2">
+              {!isEditing && (<button className="rounded-2xl bg-slate-900 px-4 py-2 text-white shadow hover:opacity-90" type="submit">Toevoegen</button>)}
               {isEditing && (<>
-                <button className="rounded-2xl bg-slate-900 px-4 py-2 text-white shadow hover:opacity-90 min-h-[44px]" type="button" onClick={saveEdit}>Opslaan</button>
-                <button className="rounded-2xl border px-4 py-2 shadow-sm min-h-[44px]" type="button" onClick={cancelEdit}>Annuleren</button>
+                <button className="rounded-2xl bg-slate-900 px-4 py-2 text-white shadow hover:opacity-90" type="button" onClick={saveEdit}>Opslaan</button>
+                <button className="rounded-2xl border px-4 py-2 shadow-sm" type="button" onClick={cancelEdit}>Annuleren</button>
               </>)}
-              <button type="button" className="ml-auto rounded-2xl border px-3 py-2 text-sm shadow-sm min-h-[44px]" onClick={resetForm}>Formulier leegmaken</button>
+              <button type="button" className="ml-auto rounded-2xl border px-3 py-2 text-sm shadow-sm" onClick={resetForm}>Formulier leegmaken</button>
             </div>
           </form>
         </section>
 
         {/* Filters/Sortering */}
         <section className={`${activeTab==='all' ? '' : 'hidden'} mb-3`}>
-          <button onClick={() => setShowFilters(v => !v)} className="mb-2 inline-flex sm:hidden items-center gap-2 rounded-xl border px-3 py-2 text-sm shadow-sm min-h-[44px]" aria-expanded={showFilters} aria-controls="filters-section">Filters</button>
-<div id="filters-section" className={`grid grid-cols-1 sm:grid-cols-3 gap-2" ${showFilters ? "" : "hidden sm:grid"}`}>
-            <input className="w-full min-w-0 rounded-xl border px-3 py-2 min-h-[44px]" placeholder="Zoek op adres, plaats, makelaar..." value={filter} onChange={(e) => setFilter(e.target.value)} />
-            <select className="w-full min-w-0 rounded-xl border px-3 py-2 min-h-[44px]" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <input className="w-full min-w-0 rounded-xl border px-3 py-2" placeholder="Zoek op adres, plaats, makelaar..." value={filter} onChange={(e) => setFilter(e.target.value)} />
+            <select className="w-full min-w-0 rounded-xl border px-3 py-2" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
               <option value="">Alle statussen</option>
               {STATUS_OPTIONS.map((o) => (<option key={o.value} value={o.value}>{o.label}</option>))}
             </select>
-            <div className="w-full min-w-0 min-h-[44px]">
-              <label className="sr-only min-h-[44px]">Sorteren</label>
-              <select className="w-full rounded-xl border px-3 py-2 min-h-[44px]" value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
+            <div className="w-full min-w-0">
+              <label className="sr-only">Sorteren</label>
+              <select className="w-full rounded-xl border px-3 py-2" value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
                 <option value="createdDesc">Nieuwste eerst</option>
                 <option value="cityAsc">Plaats A→Z</option>
                 <option value="statusAsc">Status A→Z</option>
@@ -641,57 +646,57 @@ const [myVotes, setMyVotes] = useState({}); // { [itemId]: 1 | -1 | 0 }
 
         {/* Lijst: Alle woningen */}
         <section className={`space-y-3 ${activeTab==='all' ? '' : 'hidden'}`}>
-          {visible.length === 0 && (<div className="rounded-2xl border bg-white p-6 text-center text-slate-600 min-h-[44px]">Nog geen woningen opgeslagen.</div>)}
+          {visible.length === 0 && (<div className="rounded-2xl border bg-white p-6 text-center text-slate-600">Nog geen woningen opgeslagen.</div>)}
           {visible.map((it, idx) => (
-            <article key={it.id} className="rounded-2xl border bg-white p-4 shadow-sm min-h-[44px]">
-              <div className="flex flex-col gap-3 min-h-[44px]">
-                <div className="grid gap-3 sm:grid-cols-[1fr,240px] min-h-[44px]">
-                  <div className="grow min-h-[44px]">
-                    <div className="flex flex-wrap items-center gap-2 min-w-0 min-h-[44px]">
-                      <h3 className="text-lg font-semibold line-clamp-1 min-h-[44px]">{it.title || "(Geen titel)"}</h3>
+            <article key={it.id} className="rounded-2xl border bg-white p-4 shadow-sm">
+              <div className="flex flex-col gap-3">
+                <div className="grid gap-3 sm:grid-cols-[1fr,auto]">
+                  <div className="grow">
+                    <div className="flex flex-wrap items-center gap-2 min-w-0">
+                      <h3 className="text-lg font-semibold">{it.title || "(Geen titel)"}</h3>
                       <span className={badgeClass(it.status)}>{STATUS_OPTIONS.find((s) => s.value === it.status)?.label || it.status}</span>
                       {it.url && <LinkChip url={it.url} />}
-                      {Number(it.price) > 0 && (<span className="ml-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 min-h-[44px]">{formatEUR(it.price)}</span>)}
-                      {averageRating(it.ratings) > 0 && (<span className="ml-1 rounded-full bg-yellow-50 px-2 py-0.5 text-xs font-medium text-amber-700 min-h-[44px]">⭐ {averageRating(it.ratings)}/5</span>)}
+                      {Number(it.price) > 0 && (<span className="ml-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">{formatEUR(it.price)}</span>)}
+                      {averageRating(it.ratings) > 0 && (<span className="ml-1 rounded-full bg-yellow-50 px-2 py-0.5 text-xs font-medium text-amber-700">⭐ {averageRating(it.ratings)}/5</span>)}
                     </div>
-                    <p className="text-sm text-slate-700 min-h-[44px]">
+                    <p className="text-sm text-slate-700">
                       {it.address && <span>{it.address}, </span>}
                       {[it.postalCode, it.city].filter(Boolean).join(" ")}
                       {it.country ? `, ${it.country}` : ""}
                     </p>
-                    {it.agencyName && (<p className="text-xs text-slate-600 line-clamp-3 min-h-[44px]">Makelaardij: {it.agencyName}</p>)}
+                    {it.agencyName && (<p className="text-xs text-slate-600">Makelaardij: {it.agencyName}</p>)}
                     {(it.agentName || it.agentPhone || it.agentEmail) && (
-                      <p className="text-xs text-slate-600 line-clamp-3 min-h-[44px]">Makelaar: {[it.agentName, it.agentPhone, it.agentEmail].filter(Boolean).join(" · ")}</p>
+                      <p className="text-xs text-slate-600">Makelaar: {[it.agentName, it.agentPhone, it.agentEmail].filter(Boolean).join(" · ")}</p>
                     )}
 
                     {/* Inline wijzigen */}
-                    <div className="mt-2 flex flex-wrap items-center gap-2 min-w-0 min-h-[44px]">
-                      <label className="text-xs text-slate-600 min-h-[44px]">Status</label>
-                      <select className="rounded-lg border px-2 py-1 text-xs min-h-[44px]" value={it.status} onChange={(e) => updateItem(it.id, { status: e.target.value })}>
+                    <div className="mt-2 flex flex-wrap items-center gap-2 min-w-0">
+                      <label className="text-xs text-slate-600">Status</label>
+                      <select className="rounded-lg border px-2 py-1 text-xs" value={it.status} onChange={(e) => updateItem(it.id, { status: e.target.value })}>
                         {STATUS_OPTIONS.map((o) => (<option key={o.value} value={o.value}>{o.label}</option>))}
                       </select>
-                      <label className="ml-2 text-xs text-slate-600 min-h-[44px]">Bezichtiging</label>
-                      <input type="datetime-local" className="rounded-lg border px-2 py-1 text-xs w-full sm:w-auto min-w-0 max-w-full appearance-none min-h-[44px]" value={it.viewingAt || ""} onChange={(e) => updateItem(it.id, { viewingAt: e.target.value })} />
-                      {it.viewingAt && (<span className="text-xs text-slate-600 min-h-[44px]">({formatViewing(it.viewingAt)})</span>)}
+                      <label className="ml-2 text-xs text-slate-600">Bezichtiging</label>
+                      <input type="datetime-local" className="rounded-lg border px-2 py-1 text-xs w-full sm:w-auto min-w-0 max-w-full appearance-none" value={it.viewingAt || ""} onChange={(e) => updateItem(it.id, { viewingAt: e.target.value })} />
+                      {it.viewingAt && (<span className="text-xs text-slate-600">({formatViewing(it.viewingAt)})</span>)}
                     </div>
-                    {it.notes && <p className="mt-2 text-sm text-slate-600 line-clamp-3 min-h-[44px]">🗒️ {it.notes}</p>}
+                    {it.notes && <p className="mt-2 text-sm text-slate-600">🗒️ {it.notes}</p>}
                   </div>
 
-                  <div className="flex flex-wrap items-start justify-start gap-2 self-start sm:flex-nowrap sm:justify-end sm:min-w-max sm:whitespace-nowrap min-h-[44px]">
-                    <button onClick={() => openOsmApprox(it, updateItem)} className="inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm shadow-sm hover:bg-slate-50 min-h-[44px]">
-                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4 min-h-[44px]"><path d="M9 3.5L3.5 5v15L9 18.5l6 2.5 5.5-1.5v-15L15 5.5 9 3.5zm6 3.31l3-.82v12.02l-3 .82V6.81zM8 5.19l5 2.08v12.54l-5-2.08V5.19zM5 6.06l2-.55v12.52l-2 .55V6.06z"/></svg>
+                  <div className="flex flex-wrap items-start justify-start gap-2 self-start sm:flex-nowrap sm:justify-end sm:min-w-max sm:whitespace-nowrap">
+                    <button onClick={() => openOsmApprox(it, updateItem)} className="inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm shadow-sm hover:bg-slate-50">
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4"><path d="M9 3.5L3.5 5v15L9 18.5l6 2.5 5.5-1.5v-15L15 5.5 9 3.5zm6 3.31l3-.82v12.02l-3 .82V6.81zM8 5.19l5 2.08v12.54l-5-2.08V5.19zM5 6.06l2-.55v12.52l-2 .55V6.06z"/></svg>
                       Toon op OSM
                     </button>
-                    <button onClick={() => startEdit(it)} className="rounded-xl border px-3 py-2 text-sm shadow-sm hover:bg-slate-50 min-h-[44px]">Bewerken</button>
-                    <button onClick={() => remove(it.id)} className="rounded-xl border px-3 py-2 text-sm shadow-sm hover:bg-rose-50 min-h-[44px]">Verwijderen</button>
-                    <button onClick={() => move(it.id, "up")} disabled={idx === 0} className="rounded-xl border px-3 py-2 text-sm shadow-sm disabled:opacity-40 min-h-[44px]">↑</button>
-                    <button onClick={() => move(it.id, "down")} disabled={idx === visible.length - 1} className="rounded-xl border px-3 py-2 text-sm shadow-sm disabled:opacity-40 min-h-[44px]">↓</button>
+                    <button onClick={() => startEdit(it)} className="rounded-xl border px-3 py-2 text-sm shadow-sm hover:bg-slate-50">Bewerken</button>
+                    <button onClick={() => remove(it.id)} className="rounded-xl border px-3 py-2 text-sm shadow-sm hover:bg-rose-50">Verwijderen</button>
+                    <button onClick={() => move(it.id, "up")} disabled={idx === 0} className="rounded-xl border px-3 py-2 text-sm shadow-sm disabled:opacity-40">↑</button>
+                    <button onClick={() => move(it.id, "down")} disabled={idx === visible.length - 1} className="rounded-xl border px-3 py-2 text-sm shadow-sm disabled:opacity-40">↓</button>
                   </div>
                 </div>
                 {it.url && <SmartLinkPreview url={it.url} />}
 
                 {/* Likes / Dislikes */}
-                <div className="mt-2 flex items-center gap-3 min-h-[44px]">
+                <div className="mt-2 flex items-center gap-3">
                   <button
                     type="button"
                     onClick={() => castVote(it.id, 1)}
@@ -699,7 +704,7 @@ const [myVotes, setMyVotes] = useState({}); // { [itemId]: 1 | -1 | 0 }
                     className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-sm transition ${myVotes[it.id] === 1 ? "bg-emerald-50 border-emerald-200 text-emerald-700" : "hover:bg-slate-50"}`}
                     title="Vind ik leuk"
                   >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 min-h-[44px]" viewBox="0 0 24 24" fill="currentColor">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
                       <path d="M2 10h4v10H2V10Zm6.3 10h7.36a3 3 0 0 0 2.94-2.43l1.03-5.67A3 3 0 0 0 16.69 8H13V6a3 3 0 0 0-3-3h-.5a1 1 0 0 0-1 1.2l.7 3.5A2 2 0 0 1 8.25 9L8 10.5V20.5c.08.32.33.5.3.5Z"/>
                     </svg>
                     <span>{Number(it.likes) || 0}</span>
@@ -712,7 +717,7 @@ const [myVotes, setMyVotes] = useState({}); // { [itemId]: 1 | -1 | 0 }
                     className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-sm transition ${myVotes[it.id] === -1 ? "bg-rose-50 border-rose-200 text-rose-700" : "hover:bg-slate-50"}`}
                     title="Vind ik niet leuk"
                   >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 min-h-[44px]" viewBox="0 0 24 24" fill="currentColor">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
                       <path d="M2 4h4v10H2V4Zm6.3-2h7.36A3 3 0 0 1 18.6 4.43l1.03 5.67A3 3 0 0 1 16.69 14H13v2a3 3 0 0 1-3 3h-.5a1 1 0 0 1-1-1.2l.7-3.5A2 2 0 0 0 8.25 12L8 10.5V1.5c.08-.32.33-.5.3-.5Z"/>
                     </svg>
                     <span>{Number(it.dislikes) || 0}</span>
@@ -725,38 +730,38 @@ const [myVotes, setMyVotes] = useState({}); // { [itemId]: 1 | -1 | 0 }
 
         {/* Ingeplande bezichtigingen */}
         <section className={`${activeTab==='scheduled' ? '' : 'hidden'} space-y-3`}>
-          {scheduledVisible.length === 0 && (<div className="rounded-2xl border bg-white p-6 text-center text-slate-600 min-h-[44px]">Geen ingeplande bezichtigingen.</div>)}
+          {scheduledVisible.length === 0 && (<div className="rounded-2xl border bg-white p-6 text-center text-slate-600">Geen ingeplande bezichtigingen.</div>)}
           {scheduledVisible.map((it) => (
-            <article key={`sched-${it.id}`} className="rounded-2xl border bg-white p-4 shadow-sm min-h-[44px]">
-              <div className="flex flex-col gap-3 min-h-[44px]">
-                <div className="grid gap-3 sm:grid-cols-[1fr,240px] min-h-[44px]">
-                  <div className="grow min-h-[44px]">
-                    <div className="flex flex-wrap items-center gap-2 min-h-[44px]">
-                      <h3 className="text-lg font-semibold line-clamp-1 min-h-[44px]">{it.title || "(Geen titel)"}</h3>
+            <article key={`sched-${it.id}`} className="rounded-2xl border bg-white p-4 shadow-sm">
+              <div className="flex flex-col gap-3">
+                <div className="grid gap-3 sm:grid-cols-[1fr,auto]">
+                  <div className="grow">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="text-lg font-semibold">{it.title || "(Geen titel)"}</h3>
                       <span className={badgeClass(it.status)}>{STATUS_OPTIONS.find((s) => s.value === it.status)?.label || it.status}</span>
                       {it.url && <LinkChip url={it.url} />}
-                      {Number(it.price) > 0 && (<span className="ml-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 min-h-[44px]">{formatEUR(it.price)}</span>)}
-                      {averageRating(it.ratings) > 0 && (<span className="ml-1 rounded-full bg-yellow-50 px-2 py-0.5 text-xs font-medium text-amber-700 min-h-[44px]">⭐ {averageRating(it.ratings)}/5</span>)}
+                      {Number(it.price) > 0 && (<span className="ml-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">{formatEUR(it.price)}</span>)}
+                      {averageRating(it.ratings) > 0 && (<span className="ml-1 rounded-full bg-yellow-50 px-2 py-0.5 text-xs font-medium text-amber-700">⭐ {averageRating(it.ratings)}/5</span>)}
                     </div>
-                    {it.viewingAt && (<p className="mt-1 text-sm text-slate-700 min-h-[44px]">📅 Bezichtiging: {formatViewing(it.viewingAt)}</p>)}
-                    <p className="text-sm text-slate-700 min-h-[44px]">
+                    {it.viewingAt && (<p className="mt-1 text-sm text-slate-700">📅 Bezichtiging: {formatViewing(it.viewingAt)}</p>)}
+                    <p className="text-sm text-slate-700">
                       {it.address && <span>{it.address}, </span>}
                       {[it.postalCode, it.city].filter(Boolean).join(" ")}
                       {it.country ? `, ${it.country}` : ""}
                     </p>
                   </div>
-                  <div className="flex flex-wrap items-start justify-start gap-2 self-start sm:flex-nowrap sm:justify-end sm:min-w-max sm:whitespace-nowrap min-h-[44px]">
-                    <button onClick={() => openOsmApprox(it, updateItem)} className="inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm shadow-sm hover:bg-slate-50 min-h-[44px]">
-                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4 min-h-[44px]"><path d="M9 3.5L3.5 5v15L9 18.5l6 2.5 5.5-1.5v-15L15 5.5 9 3.5zm6 3.31l3-.82v12.02l-3 .82V6.81zM8 5.19l5 2.08v12.54l-5-2.08V5.19zM5 6.06l2-.55v12.52l-2 .55V6.06z"/></svg>
+                  <div className="flex flex-wrap items-start justify-start gap-2 self-start sm:flex-nowrap sm:justify-end sm:min-w-max sm:whitespace-nowrap">
+                    <button onClick={() => openOsmApprox(it, updateItem)} className="inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm shadow-sm hover:bg-slate-50">
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4"><path d="M9 3.5L3.5 5v15L9 18.5l6 2.5 5.5-1.5v-15L15 5.5 9 3.5zm6 3.31l3-.82v12.02l-3 .82V6.81zM8 5.19l5 2.08v12.54l-5-2.08V5.19zM5 6.06l2-.55v12.52l-2 .55V6.06z"/></svg>
                       Toon op OSM
                     </button>
-                    <button onClick={() => startEdit(it)} className="rounded-xl border px-3 py-2 text-sm shadow-sm hover:bg-slate-50 min-h-[44px]">Bewerken</button>
+                    <button onClick={() => startEdit(it)} className="rounded-xl border px-3 py-2 text-sm shadow-sm hover:bg-slate-50">Bewerken</button>
                   </div>
                 </div>
                 {it.url && <SmartLinkPreview url={it.url} />}
 
                 {/* Likes / Dislikes */}
-                <div className="mt-2 flex items-center gap-3 min-h-[44px]">
+                <div className="mt-2 flex items-center gap-3">
                   <button
                     type="button"
                     onClick={() => castVote(it.id, 1)}
@@ -764,7 +769,7 @@ const [myVotes, setMyVotes] = useState({}); // { [itemId]: 1 | -1 | 0 }
                     className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-sm transition ${myVotes[it.id] === 1 ? "bg-emerald-50 border-emerald-200 text-emerald-700" : "hover:bg-slate-50"}`}
                     title="Vind ik leuk"
                   >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 min-h-[44px]" viewBox="0 0 24 24" fill="currentColor">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
                       <path d="M2 10h4v10H2V10Zm6.3 10h7.36a3 3 0 0 0 2.94-2.43l1.03-5.67A3 3 0 0 0 16.69 8H13V6a3 3 0 0 0-3-3h-.5a1 1 0 0 0-1 1.2l.7 3.5A2 2 0 0 1 8.25 9L8 10.5V20.5c.08.32.33.5.3.5Z"/>
                     </svg>
                     <span>{Number(it.likes) || 0}</span>
@@ -777,7 +782,7 @@ const [myVotes, setMyVotes] = useState({}); // { [itemId]: 1 | -1 | 0 }
                     className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-sm transition ${myVotes[it.id] === -1 ? "bg-rose-50 border-rose-200 text-rose-700" : "hover:bg-slate-50"}`}
                     title="Vind ik niet leuk"
                   >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 min-h-[44px]" viewBox="0 0 24 24" fill="currentColor">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
                       <path d="M2 4h4v10H2V4Zm6.3-2h7.36A3 3 0 0 1 18.6 4.43l1.03 5.67A3 3 0 0 1 16.69 14H13v2a3 3 0 0 1-3 3h-.5a1 1 0 0 1-1-1.2l.7-3.5A2 2 0 0 0 8.25 12L8 10.5V1.5c.08-.32.33-.5.3-.5Z"/>
                     </svg>
                     <span>{Number(it.dislikes) || 0}</span>
@@ -790,27 +795,27 @@ const [myVotes, setMyVotes] = useState({}); // { [itemId]: 1 | -1 | 0 }
 
         {/* Reviews Tab */}
         <section className={`${activeTab==='reviews' ? '' : 'hidden'} space-y-3`}>
-          {items.length === 0 && (<div className="rounded-2xl border bg-white p-6 text-center text-slate-600 min-h-[44px]">Nog geen woningen om te beoordelen.</div>)}
+          {items.length === 0 && (<div className="rounded-2xl border bg-white p-6 text-center text-slate-600">Nog geen woningen om te beoordelen.</div>)}
           {items.map((it) => (
-            <article key={`rev-${it.id}`} className="rounded-2xl border bg-white p-4 shadow-sm min-h-[44px]">
-              <div className="flex flex-col gap-3 min-h-[44px]">
-                <div className="grid gap-3 sm:grid-cols-[1fr,240px] min-h-[44px]">
-                  <div className="grow min-h-[44px]">
-                    <div className="flex flex-wrap items-center gap-2 min-w-0 min-h-[44px]">
-                      <h3 className="text-lg font-semibold line-clamp-1 min-h-[44px]">{it.title || "(Geen titel)"}</h3>
+            <article key={`rev-${it.id}`} className="rounded-2xl border bg-white p-4 shadow-sm">
+              <div className="flex flex-col gap-3">
+                <div className="grid gap-3 sm:grid-cols-[1fr,auto]">
+                  <div className="grow">
+                    <div className="flex flex-wrap items-center gap-2 min-w-0">
+                      <h3 className="text-lg font-semibold">{it.title || "(Geen titel)"}</h3>
                       <span className={badgeClass(it.status)}>{STATUS_OPTIONS.find((s) => s.value === it.status)?.label || it.status}</span>
                       {it.url && <LinkChip url={it.url} />}
-                      {Number(it.price) > 0 && (<span className="ml-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 min-h-[44px]">{formatEUR(it.price)}</span>)}
-                      {averageRating(it.ratings) > 0 && (<span className="ml-2 rounded-full bg-yellow-50 px-2 py-0.5 text-xs font-medium text-amber-700 min-h-[44px]">⭐ {averageRating(it.ratings)}/5</span>)}
+                      {Number(it.price) > 0 && (<span className="ml-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">{formatEUR(it.price)}</span>)}
+                      {averageRating(it.ratings) > 0 && (<span className="ml-2 rounded-full bg-yellow-50 px-2 py-0.5 text-xs font-medium text-amber-700">⭐ {averageRating(it.ratings)}/5</span>)}
                     </div>
-                    <p className="text-sm text-slate-700 min-h-[44px]">
+                    <p className="text-sm text-slate-700">
                       {it.address && <span>{it.address}, </span>}
                       {[it.postalCode, it.city].filter(Boolean).join(" ")}
                       {it.country ? `, ${it.country}` : ""}
                     </p>
                   </div>
-                  <div className="flex flex-wrap items-start justify-start gap-2 self-start sm:flex-nowrap sm:justify-end sm:min-w-max sm:whitespace-nowrap min-h-[44px]">
-                    <button onClick={() => startEdit(it)} className="rounded-xl border px-3 py-2 text-sm shadow-sm hover:bg-slate-50 min-h-[44px]">Bewerken</button>
+                  <div className="flex flex-wrap items-start justify-start gap-2 self-start sm:flex-nowrap sm:justify-end sm:min-w-max sm:whitespace-nowrap">
+                    <button onClick={() => startEdit(it)} className="rounded-xl border px-3 py-2 text-sm shadow-sm hover:bg-slate-50">Bewerken</button>
                     <button type="button" onClick={async () => {
                       try {
                         await updateDoc(doc(db, "boards", boardId, "items", it.id), {
@@ -825,17 +830,17 @@ const [myVotes, setMyVotes] = useState({}); // { [itemId]: 1 | -1 | 0 }
                           "ratings.feasibility": 0,
                         });
                       } catch (err) { alert("Reset mislukt: " + (err?.message || String(err))); }
-                    }} className="rounded-xl border px-3 py-2 text-sm shadow-sm hover:bg-white min-h-[44px]">Reset sterren</button>
+                    }} className="rounded-xl border px-3 py-2 text-sm shadow-sm hover:bg-white">Reset sterren</button>
                   </div>
                 </div>
 
                 {/* Volledige beoordeling invullen */}
-                <div className="rounded-xl border bg-slate-50 p-3 min-h-[44px]">
-                  <div className="mb-2 flex items-center justify-between min-h-[44px]">
-                    <h4 className="text-sm font-semibold min-h-[44px]">Beoordeling</h4>
-                    <span className="text-xs text-slate-600 min-h-[44px]">Gemiddelde: {averageRating(it.ratings) || "–"}/5</span>
+                <div className="rounded-xl border bg-slate-50 p-3">
+                  <div className="mb-2 flex items-center justify-between">
+                    <h4 className="text-sm font-semibold">Beoordeling</h4>
+                    <span className="text-xs text-slate-600">Gemiddelde: {averageRating(it.ratings) || "–"}/5</span>
                   </div>
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 min-h-[44px]">
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                     <StarRating value={it.ratings?.overall || 0} onChange={(v) => updateRating(it.id, "overall", v)} label="Algehele indruk" />
                     <StarRating value={it.ratings?.location || 0} onChange={(v) => updateRating(it.id, "location", v)} label="Locatie / Ligging" />
                     <StarRating value={it.ratings?.accessibility || 0} onChange={(v) => updateRating(it.id, "accessibility", v)} label="Bereikbaarheid" />
@@ -846,7 +851,7 @@ const [myVotes, setMyVotes] = useState({}); // { [itemId]: 1 | -1 | 0 }
                     <StarRating value={it.ratings?.privateAreas || 0} onChange={(v) => updateRating(it.id, "privateAreas", v)} label="Privévertrekken" />
                     <StarRating value={it.ratings?.feasibility || 0} onChange={(v) => updateRating(it.id, "feasibility", v)} label="Realiseerbaarheid" />
                   </div>
-                  {it.status !== "bezichtigd" && (<p className="mt-2 text-xs text-slate-500 min-h-[44px]">Tip: markeer de woning als "Bezichtigd" zodra je de beoordeling invult.</p>)}
+                  {it.status !== "bezichtigd" && (<p className="mt-2 text-xs text-slate-500">Tip: markeer de woning als "Bezichtigd" zodra je de beoordeling invult.</p>)}
                 </div>
               </div>
             </article>
@@ -855,18 +860,18 @@ const [myVotes, setMyVotes] = useState({}); // { [itemId]: 1 | -1 | 0 }
       </div>
 
       {/* Onderste tabbar (mobielvriendelijk) */}
-      <nav className="fixed bottom-0 left-0 right-0 z-40 border-t bg-white/95/95 backdrop-blur pb-[max(0.25rem,env(safe-area-inset-bottom))] min-h-[44px]">
-  <div className="mx-auto max-w-6xl grid grid-cols-4 min-h-[44px]">
+      <nav className="fixed bottom-0 left-0 right-0 z-40 border-t bg-white/95 backdrop-blur">
+  <div className="mx-auto max-w-6xl grid grid-cols-4">
     {/* Nieuwe woning */}
     <button
       onClick={() => setActiveTab("new")}
       aria-pressed={activeTab === "new"}
       className={`flex flex-col items-center justify-center gap-1 py-2 ${activeTab==='new' ? 'text-slate-900 font-semibold' : 'text-slate-600'}`}
     >
-      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 min-h-[44px]" viewBox="0 0 24 24" fill="currentColor">
+      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
         <path d="M7 3h10a4 4 0 0 1 4 4v10a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V7a4 4 0 0 1 4-4m5 4a1 1 0 0 0-1 1v3H8a1 1 0 1 0 0 2h3v3a1 1 0 1 0 2 0v-3h3a1 1 0 1 0 0-2h-3V8a1 1 0 0 0-1-1Z"/>
       </svg>
-      <span className="text-xs min-h-[44px]">Nieuwe woning</span>
+      <span className="text-xs">Nieuwe woning</span>
     </button>
 
     {/* Alle woningen */}
@@ -875,10 +880,10 @@ const [myVotes, setMyVotes] = useState({}); // { [itemId]: 1 | -1 | 0 }
       aria-pressed={activeTab === "all"}
       className={`flex flex-col items-center justify-center gap-1 py-2 ${activeTab==='all' ? 'text-slate-900 font-semibold' : 'text-slate-600'}`}
     >
-      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 min-h-[44px]" viewBox="0 0 24 24" fill="currentColor">
+      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
         <path d="M7 6h13a1 1 0 1 1 0 2H7a1 1 0 0 1 0-2Zm0 5h13a1 1 0 1 1 0 2H7a1 1 0 0 1 0-2Zm0 5h13a1 1 0 1 1 0 2H7a1 1 0 0 1 0-2ZM3 6.75A1.75 1.75 0 1 0 3 10.25 1.75 1.75 0 0 0 3 6.75Zm0 5A1.75 1.75 0 1 0 3 15.25 1.75 1.75 0 0 0 3 11.75Z"/>
       </svg>
-      <span className="text-xs min-h-[44px]">Alle woningen</span>
+      <span className="text-xs">Alle woningen</span>
     </button>
 
     {/* Ingepland */}
@@ -887,10 +892,10 @@ const [myVotes, setMyVotes] = useState({}); // { [itemId]: 1 | -1 | 0 }
       aria-pressed={activeTab === "scheduled"}
       className={`flex flex-col items-center justify-center gap-1 py-2 ${activeTab==='scheduled' ? 'text-slate-900 font-semibold' : 'text-slate-600'}`}
     >
-      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 min-h-[44px]" viewBox="0 0 24 24" fill="currentColor">
+      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
         <path d="M7 2a1 1 0 0 1 1 1v1h8V3a1 1 0 1 1 2 0v1h1a3 3 0 0 1 3 3v11a3 3 0 0 1-3 3H5a3 3 0 0 1-3-3V7a3 3 0 0 1 3-3h1V3a1 1 0 0 1 1-1Zm13 8H4v8a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-8ZM5 9h14V7a1 1 0 0 0-1-1h-1v1a1 1 0 1 1-2 0V6H8v1a1 1 0 1 1-2 0V6H5a1 1 0 0 0-1 1v2Z"/>
       </svg>
-      <span className="text-xs min-h-[44px]">Ingepland</span>
+      <span className="text-xs">Ingepland</span>
     </button>
 
     {/* Reviews */}
@@ -899,10 +904,10 @@ const [myVotes, setMyVotes] = useState({}); // { [itemId]: 1 | -1 | 0 }
       aria-pressed={activeTab === "reviews"}
       className={`flex flex-col items-center justify-center gap-1 py-2 ${activeTab==='reviews' ? 'text-slate-900 font-semibold' : 'text-slate-600'}`}
     >
-      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 min-h-[44px]" viewBox="0 0 24 24" fill="currentColor">
+      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
         <path d="M12 3.5 9.6 9H4.5l4.2 3.1L7.5 17 12 14.2 16.5 17l-1.2-4.9 4.2-3.1h-5.1L12 3.5Z"/>
       </svg>
-      <span className="text-xs min-h-[44px]">Reviews</span>
+      <span className="text-xs">Reviews</span>
     </button>
   </div>
 </nav>
