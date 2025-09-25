@@ -944,6 +944,7 @@ function makeOsmUrl(lat, lng, z = 14) {
 
 async function openOsmApprox(it, updateItem, { force = false } = {}) {
   const hasCoords = Number(it?.lat) && Number(it?.lng);
+  // Gebruik opgeslagen coördinaten tenzij we forceren opnieuw te geocoden
   if (hasCoords && !force) {
     window.open(makeOsmUrl(it.lat, it.lng), "_blank", "noopener");
     return;
@@ -963,8 +964,8 @@ async function openOsmApprox(it, updateItem, { force = false } = {}) {
     if (it.id && (force || !hasCoords)) await updateItem(it.id, { lat, lng });
     window.open(makeOsmUrl(lat, lng), "_blank", "noopener");
   } catch (e) {
-    const q = encodeURIComponent([it.address, it.postalCode, it.city, it.country].filter(Boolean).join(" "));
-    window.open(`https://www.openstreetmap.org/search?query=${q}`, "_blank", "noopener");
+    // Geen OSM-zoekfallback meer om ambiguïteit te vermijden
+    alert(`Geocoden mislukt: ${e?.message || e}. Probeer het later opnieuw of vul (tijdelijk) handmatig lat/lng in.`);
   }
 }
 
