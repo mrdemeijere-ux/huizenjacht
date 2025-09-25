@@ -162,7 +162,7 @@ function LinkChip({ url }) {
 }
 
 // Rijke link preview via serverless endpoint (optioneel)
-function SmartLinkPreview({ url }) {
+function SmartLinkPreview({ url, status, price }) {
   if (!url) return null;
 
   const [meta, setMeta] = useState(null);
@@ -184,39 +184,56 @@ function SmartLinkPreview({ url }) {
         if (!alive) return;
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         const data = await r.json();
-        // Basic sanity: only accept if has at least a title/description/image
-        if (data && (data.title || data.description || data.image)) {
-          setMeta(data);
-        }
+        if (data && (data.title || data.description || data.image)) setMeta(data);
       })
       .catch((e) => alive && setError(e?.message || String(e)))
       .finally(() => alive && setLoading(false));
     return () => { alive = false; };
   }, [endpoint, url]);
 
-  // Render a large card (image on top, text below), similar to marketplace tiles
   const title = meta?.title || parts.host || "Link";
   const subtitle = meta?.siteName || parts.host;
   const description = meta?.description;
 
+  const statusLabel = (s) => (typeof STATUS_OPTIONS !== 'undefined'
+    ? (STATUS_OPTIONS.find(o => o.value === s)?.label || s)
+    : s);
+  const fmtPrice = (n) => {
+    const num = Number(n);
+    if (!isFinite(num) || num <= 0) return null;
+    try { return new Intl.NumberFormat('nl-NL', { style: 'currency', currency: 'EUR' }).format(num); }
+    catch { return `€ ${num}`; }
+  };
+  const priceText = fmtPrice(price);
+
   return (
     <a href={url} target="_blank" rel="noopener noreferrer" className="block">
-      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white hover:shadow-sm transition">
         {/* Image area */}
         <div className="relative w-full aspect-[4/3] bg-slate-100">
           {meta?.image ? (
-            <img
-              src={meta.image}
-              alt=""
-              className="absolute inset-0 h-full w-full object-cover"
-              loading="lazy"
-            />
+            <img src={meta.image} alt="" className="absolute inset-0 h-full w-full object-cover" loading="lazy" />
           ) : (
             <div className="absolute inset-0 grid place-items-center text-slate-400 text-xs">
               {subtitle}
             </div>
           )}
+
+          {/* Price badge (bottom-left) */}
+          {priceText && (
+            <span className="absolute bottom-2 left-2 rounded-full bg-emerald-600/90 text-white text-xs px-2 py-1">
+              {priceText}
+            </span>
+          )}
+
+          {/* Status badge (bottom-right) */}
+          {status && (
+            <span className="absolute bottom-2 right-2 rounded-full bg-blue-600/90 text-white text-xs px-2 py-1">
+              {statusLabel(status)}
+            </span>
+          )}
         </div>
+
         {/* Text area */}
         <div className="p-3">
           <div className="text-sm font-semibold leading-snug line-clamp-2">{title}</div>
@@ -652,7 +669,7 @@ const [myVotes, setMyVotes] = useState({}); // { [itemId]: 1 | -1 | 0 }
       </div>
     )}
     {visible.map((it) => (
-      <SmartLinkPreview key={it.id} url={it.url} />
+      <SmartLinkPreview key={it.id} url={it.url} status={it.status} price={it.price} />
     ))}
   </div>
 </section>
