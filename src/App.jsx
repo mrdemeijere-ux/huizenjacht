@@ -642,7 +642,7 @@ const [myVotes, setMyVotes] = useState({}); // { [itemId]: 1 | -1 | 0 }
           {visible.map((it, idx) => (
             <article key={it.id} className="rounded-2xl border bg-white p-4 shadow-sm">
               <div className="flex flex-col gap-3">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                <div className="grid gap-3 sm:grid-cols-[1fr,auto]">
                   <div className="grow">
                     <div className="flex flex-wrap items-center gap-2 min-w-0">
                       <h3 className="text-lg font-semibold">{it.title || "(Geen titel)"}</h3>
@@ -674,7 +674,7 @@ const [myVotes, setMyVotes] = useState({}); // { [itemId]: 1 | -1 | 0 }
                     {it.notes && <p className="mt-2 text-sm text-slate-600">🗒️ {it.notes}</p>}
                   </div>
 
-                  <div className="flex flex-wrap items-start gap-2">
+                  <div className="flex flex-wrap sm:flex-nowrap items-start justify-start sm:justify-end gap-2 self-start shrink-0 min-w-max whitespace-nowrap">
                     <button onClick={() => openOsmApprox(it, updateItem)} className="inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm shadow-sm hover:bg-slate-50">
                       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4"><path d="M9 3.5L3.5 5v15L9 18.5l6 2.5 5.5-1.5v-15L15 5.5 9 3.5zm6 3.31l3-.82v12.02l-3 .82V6.81zM8 5.19l5 2.08v12.54l-5-2.08V5.19zM5 6.06l2-.55v12.52l-2 .55V6.06z"/></svg>
                       Toon op OSM
@@ -726,7 +726,7 @@ const [myVotes, setMyVotes] = useState({}); // { [itemId]: 1 | -1 | 0 }
           {scheduledVisible.map((it) => (
             <article key={`sched-${it.id}`} className="rounded-2xl border bg-white p-4 shadow-sm">
               <div className="flex flex-col gap-3">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                <div className="grid gap-3 sm:grid-cols-[1fr,auto]">
                   <div className="grow">
                     <div className="flex flex-wrap items-center gap-2">
                       <h3 className="text-lg font-semibold">{it.title || "(Geen titel)"}</h3>
@@ -742,7 +742,7 @@ const [myVotes, setMyVotes] = useState({}); // { [itemId]: 1 | -1 | 0 }
                       {it.country ? `, ${it.country}` : ""}
                     </p>
                   </div>
-                  <div className="flex flex-wrap items-start gap-2">
+                  <div className="flex flex-wrap sm:flex-nowrap items-start justify-start sm:justify-end gap-2 self-start shrink-0 min-w-max whitespace-nowrap">
                     <button onClick={() => openOsmApprox(it, updateItem)} className="inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm shadow-sm hover:bg-slate-50">
                       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4"><path d="M9 3.5L3.5 5v15L9 18.5l6 2.5 5.5-1.5v-15L15 5.5 9 3.5zm6 3.31l3-.82v12.02l-3 .82V6.81zM8 5.19l5 2.08v12.54l-5-2.08V5.19zM5 6.06l2-.55v12.52l-2 .55V6.06z"/></svg>
                       Toon op OSM
@@ -791,7 +791,7 @@ const [myVotes, setMyVotes] = useState({}); // { [itemId]: 1 | -1 | 0 }
           {items.map((it) => (
             <article key={`rev-${it.id}`} className="rounded-2xl border bg-white p-4 shadow-sm">
               <div className="flex flex-col gap-3">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                <div className="grid gap-3 sm:grid-cols-[1fr,auto]">
                   <div className="grow">
                     <div className="flex flex-wrap items-center gap-2 min-w-0">
                       <h3 className="text-lg font-semibold">{it.title || "(Geen titel)"}</h3>
@@ -806,7 +806,7 @@ const [myVotes, setMyVotes] = useState({}); // { [itemId]: 1 | -1 | 0 }
                       {it.country ? `, ${it.country}` : ""}
                     </p>
                   </div>
-                  <div className="flex flex-wrap items-start gap-2">
+                  <div className="flex flex-wrap sm:flex-nowrap items-start justify-start sm:justify-end gap-2 self-start shrink-0 min-w-max whitespace-nowrap">
                     <button onClick={() => startEdit(it)} className="rounded-xl border px-3 py-2 text-sm shadow-sm hover:bg-slate-50">Bewerken</button>
                     <button type="button" onClick={async () => {
                       try {
