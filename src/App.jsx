@@ -170,8 +170,6 @@ function SmartLinkPreview({ item, url, status, price, liked=false, likesCount=0,
   const [error, setError] = useState(null);
 
   // Heart / likes (local optimistic UI)
-  const initialLikes = (item && (item.likes ?? item.up)) || 0;
-  const [likes, setLikes] = useState(initialLikes);
   const [liked, setLiked] = useState(Boolean(item && item.liked));
 
   const endpoint = import.meta?.env?.VITE_LINK_PREVIEW_ENDPOINT;
