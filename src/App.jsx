@@ -162,7 +162,7 @@ function LinkChip({ url }) {
 }
 
 // Rijke link preview via serverless endpoint (optioneel)
-function SmartLinkPreview({ item, url, status, price, onOpenEditor, onUpdate }) {
+function SmartLinkPreview({ item, url, status, price, liked=false, likesCount=0, onToggleLike, onOpenEditor, onUpdate }) {
   if (!url) return null;
 
   const [meta, setMeta] = useState(null);
@@ -246,13 +246,13 @@ function SmartLinkPreview({ item, url, status, price, onOpenEditor, onUpdate }) 
           {/* HEART + counter (top-left) */}
           <button
             type="button"
-            onClick={toggleLike}
+            onClick={(e)=>{ e.preventDefault(); onToggleLike && onToggleLike(); }}
             className={`absolute top-2 left-2 inline-flex items-center gap-1 rounded-full border px-2 py-1 text-xs shadow-sm ${liked ? 'bg-rose-50 border-rose-200 text-rose-700' : 'bg-white/95 hover:bg-white'}`}
             aria-label="Favoriet"
             title="Favoriet"
           >
             <span className="select-none">{liked ? '❤️' : '🤍'}</span>
-            <span className="tabular-nums">{likes}</span>
+            <span className="tabular-nums">{likesCount}</span>
           </button>
 
           {/* BADGES: stacked bottom-right (status above, price below) */}
@@ -714,7 +714,7 @@ const [myVotes, setMyVotes] = useState({}); // { [itemId]: 1 | -1 | 0 }
       </div>
     )}
     {visible.map((it) => (
-      <SmartLinkPreview key={it.id} item={it} url={it.url} status={it.status} price={it.price} onOpenEditor={()=>setEditorItem(it)} onUpdate={(patch)=>updateItem(it.id, patch)} />
+      <SmartLinkPreview key={it.id} item={it} url={it.url} status={it.status} price={it.price} liked={myVotes[it.id]===1} likesCount={Number(it.likes)||0} onToggleLike={()=>castVote(it.id, 1)} onOpenEditor={()=>setEditorItem(it)} onUpdate={(patch)=>updateItem(it.id, patch)} />
     ))}
   </div>
 </section>
