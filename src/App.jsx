@@ -169,11 +169,7 @@ function SmartLinkPreview({ item, url, status, price, liked=false, likesCount=0,
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  // Heart / likes (local optimistic UI)
-  const [liked, setLiked] = useState(Boolean(item && item.liked));
-
   const endpoint = import.meta?.env?.VITE_LINK_PREVIEW_ENDPOINT;
-  const parts = getUrlParts(url || "");
 
   useEffect(() => {
     let alive = true;
@@ -193,29 +189,13 @@ function SmartLinkPreview({ item, url, status, price, liked=false, likesCount=0,
     return () => { alive = false; };
   }, [endpoint, url]);
 
+  const parts = getUrlParts(url || "");
   const title = meta?.title || parts.host || "Link";
   const subtitle = meta?.siteName || parts.host;
   const description = meta?.description;
-
-  const statusLabel = (s) => (typeof STATUS_OPTIONS !== 'undefined'
-    ? (STATUS_OPTIONS.find(o => o.value === s)?.label || s)
-    : s);
-  const fmtPrice = (n) => {
-    const num = Number(n);
-    if (!isFinite(num) || num <= 0) return null;
-    try { return new Intl.NumberFormat('nl-NL', { style: 'currency', currency: 'EUR' }).format(num); }
-    catch { return `€ ${num}`; }
-  };
-  const priceText = fmtPrice(price);
-
-  const toggleLike = (e) => {
-    e.preventDefault();
-    const nextLiked = !liked;
-    setLiked(nextLiked);
-    const nextLikes = Math.max(0, likes + (nextLiked ? 1 : -1));
-    setLikes(nextLikes);
-    onUpdate?.({ liked: nextLiked, likes: nextLikes, up: nextLikes });
-  };
+  const priceText = (Number(price) > 0)
+    ? new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(Number(price))
+    : null;
 
   return (
     <a href={url} target="_blank" rel="noopener noreferrer" className="block group">
@@ -257,7 +237,9 @@ function SmartLinkPreview({ item, url, status, price, liked=false, likesCount=0,
           <div className="absolute right-2 bottom-2 flex flex-col items-end gap-2">
             {status && (
               <span className="rounded-full bg-blue-600/90 text-white text-xs px-2 py-1">
-                {statusLabel(status)}
+                {typeof STATUS_OPTIONS !== 'undefined'
+                  ? (STATUS_OPTIONS.find(o => o.value === status)?.label || status)
+                  : status}
               </span>
             )}
             {priceText && (
