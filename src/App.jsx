@@ -234,20 +234,20 @@ function SmartLinkPreview({ item, url, status, price, liked=false, likesCount=0,
           </button>
 
           {/* Badges rechtsonder (status boven, prijs onder) */}
-          <div className="absolute right-2 bottom-2 flex flex-col items-end gap-2">
-            {status && (
-              <span className="rounded-full bg-blue-600/90 text-white text-xs px-2 py-1">
-                {typeof STATUS_OPTIONS !== 'undefined'
-                  ? (STATUS_OPTIONS.find(o => o.value === status)?.label || status)
-                  : status}
-              </span>
-            )}
-            {priceText && (
-              <span className="rounded-full bg-emerald-600/90 text-white text-xs px-2 py-1">
-                {priceText}
-              </span>
-            )}
-          </div>
+          <div className="absolute right-2 bottom-2 flex flex-col items-end gap-2 text-right">
+  {status && (
+    <span className="inline-flex justify-end rounded-full bg-blue-600/90 text-white text-xs px-2 py-1">
+      {typeof STATUS_OPTIONS !== 'undefined'
+        ? (STATUS_OPTIONS.find(o => o.value === status)?.label || status)
+        : status}
+    </span>
+  )}
+  {priceText && (
+    <span className="inline-flex justify-end rounded-full bg-emerald-600/90 text-white text-xs px-2 py-1 tabular-nums">
+      {priceText}
+    </span>
+  )}
+</div>
         </div>
       </div>
     </a>
