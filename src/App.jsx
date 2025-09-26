@@ -1,7 +1,7 @@
 // Canvas refresh — volledige inhoud opnieuw gesynchroniseerd
 import React, { useEffect, useMemo, useState } from "react";
 
-// === Huizenjacht – App (canoniek) ===
+// === Huizenjacht – App ===
 // Single-file MVP (React + Tailwind + Firestore realtime sync)
 // Altijd online opslag (Firestore, collection boards/global/items)
 // Functies:
