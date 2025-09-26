@@ -194,8 +194,10 @@ function SmartLinkPreview({ item, url, status, price, liked=false, likesCount=0,
   const subtitle = meta?.siteName || parts.host;
   const description = meta?.description;
   const priceText = (Number(price) > 0)
+  
     ? new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(Number(price))
     : null;
+  const isActive = liked || Number(likesCount) > 0;
 
   return (
     <a href={url} target="_blank" rel="noopener noreferrer" className="block group">
@@ -212,26 +214,27 @@ function SmartLinkPreview({ item, url, status, price, liked=false, likesCount=0,
 
           {/* EDIT button (top-right) */}
           <button
-            type="button"
-            onClick={(e)=>{ e.preventDefault(); onOpenEditor?.(); }}
-            className="absolute top-2 right-2 rounded-full bg-white/95 border px-2 py-1 text-xs shadow-sm hover:bg-white"
-            aria-label="Bewerken"
-            title="Bewerken"
-          >
-            ⋯
-          </button>
+  type="button"
+  onClick={(e)=>{ e.preventDefault(); onToggleLike && onToggleLike(); }}
+  className={`absolute top-2 left-2 inline-flex items-center gap-1 rounded-full border px-2 py-1 text-xs shadow-sm ${isActive ? 'bg-rose-50 border-rose-200 text-rose-700' : 'bg-white/95 hover:bg-white'}`}
+  aria-label="Favoriet"
+  title="Favoriet"
+>
+  <span className="select-none">{isActive ? '❤️' : '🤍'}</span>
+  <span className="tabular-nums">{likesCount}</span>
+</button>
 
           {/* HEART + counter (top-left) */}
           <button
-            type="button"
-            onClick={(e)=>{ e.preventDefault(); onToggleLike && onToggleLike(); }}
-            className={`absolute top-2 left-2 inline-flex items-center gap-1 rounded-full border px-2 py-1 text-xs shadow-sm ${liked ? 'bg-rose-50 border-rose-200 text-rose-700' : 'bg-white/95 hover:bg-white'}`}
-            aria-label="Favoriet"
-            title="Favoriet"
-          >
-            <span className="select-none">{liked ? '❤️' : '🤍'}</span>
-            <span className="tabular-nums">{likesCount}</span>
-          </button>
+  type="button"
+  onClick={(e)=>{ e.preventDefault(); onToggleLike && onToggleLike(); }}
+  className={`absolute top-2 left-2 inline-flex items-center gap-1 rounded-full border px-2 py-1 text-xs shadow-sm ${isActive ? 'bg-rose-50 border-rose-200 text-rose-700' : 'bg-white/95 hover:bg-white'}`}
+  aria-label="Favoriet"
+  title="Favoriet"
+>
+  <span className="select-none">{isActive ? '❤️' : '🤍'}</span>
+  <span className="tabular-nums">{likesCount}</span>
+</button>
 
           {/* BADGES: stacked bottom-right (status above, price below) */}
           <div className="absolute right-2 bottom-2 flex flex-col items-end gap-2">
