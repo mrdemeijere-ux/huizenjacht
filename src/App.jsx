@@ -197,7 +197,11 @@ function SmartLinkPreview({ item, url, status, price, liked=false, likesCount=0,
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  const priceText = fmtPrice(price);
+    const parts = getUrlParts(url || "");
+  const title = meta?.title || parts.host || "Link";
+  const subtitle = meta?.siteName || parts.host;
+  const description = meta?.description;
+const priceText = fmtPrice(price);
 
   return (
     <a href={url} target="_blank" rel="noopener noreferrer" className="block group">
