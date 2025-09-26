@@ -2,6 +2,9 @@
 import React, { useEffect, useMemo, useState } from "react";
 
 // === Huizenjacht – App (canoniek) ===
+
+// Helper: format price as EUR
+function fmtPrice(n){ const num=Number(n); if(!isFinite(num)||num<=0) return null; try{ return new Intl.NumberFormat("nl-NL",{style:"currency",currency:"EUR"}).format(num);}catch{ return `€ ${num}`; } }
 // Single-file MVP (React + Tailwind + Firestore realtime sync)
 // Altijd online opslag (Firestore, collection boards/global/items)
 // Functies:
@@ -195,15 +198,6 @@ function SmartLinkPreview({ item, url, status, price, liked=false, likesCount=0,
   const [error, setError] = useState(null);
 
   const priceText = fmtPrice(price);
-
-  const toggleLike = (e) => {
-    e.preventDefault();
-    const nextLiked = !liked;
-    setLiked(nextLiked);
-    const nextLikes = Math.max(0, likes + (nextLiked ? 1 : -1));
-    setLikes(nextLikes);
-    onUpdate?.({ liked: nextLiked, likes: nextLikes, up: nextLikes });
-  };
 
   return (
     <a href={url} target="_blank" rel="noopener noreferrer" className="block group">
