@@ -201,7 +201,7 @@ function SmartLinkPreview({ item, url, status, price, liked=false, likesCount=0,
     <a href={url} target="_blank" rel="noopener noreferrer" className="block group">
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white hover:shadow-sm transition">
         {/* Alleen de afbeelding, de hele tegel is klikbaar */}
-        <div className="relative w-full aspect-[4/3] bg-slate-100">
+        <div className="relative w-full aspect-[3/4] md:aspect-[4/3] bg-slate-100">
           {meta?.image ? (
             <img src={meta.image} alt="" className="absolute inset-0 h-full w-full object-cover" loading="lazy" />
           ) : (
