@@ -162,12 +162,17 @@ function LinkChip({ url }) {
 }
 
 // Rijke link preview via serverless endpoint (optioneel)
-function SmartLinkPreview({ url, status, price }) {
+function SmartLinkPreview({ item, url, status, price, onOpenEditor, onUpdate }) {
   if (!url) return null;
 
   const [meta, setMeta] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+
+  // Heart / likes (local optimistic UI)
+  const initialLikes = (item && (item.likes ?? item.up)) || 0;
+  const [likes, setLikes] = useState(initialLikes);
+  const [liked, setLiked] = useState(Boolean(item && item.liked));
 
   const endpoint = import.meta?.env?.VITE_LINK_PREVIEW_ENDPOINT;
   const parts = getUrlParts(url || "");
@@ -205,6 +210,15 @@ function SmartLinkPreview({ url, status, price }) {
   };
   const priceText = fmtPrice(price);
 
+  const toggleLike = (e) => {
+    e.preventDefault();
+    const nextLiked = !liked;
+    setLiked(nextLiked);
+    const nextLikes = Math.max(0, likes + (nextLiked ? 1 : -1));
+    setLikes(nextLikes);
+    onUpdate?.({ liked: nextLiked, likes: nextLikes, up: nextLikes });
+  };
+
   return (
     <a href={url} target="_blank" rel="noopener noreferrer" className="block group">
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white hover:shadow-sm transition">
@@ -217,6 +231,29 @@ function SmartLinkPreview({ url, status, price }) {
               {subtitle}
             </div>
           )}
+
+          {/* EDIT button (top-right) */}
+          <button
+            type="button"
+            onClick={(e)=>{ e.preventDefault(); onOpenEditor?.(); }}
+            className="absolute top-2 right-2 rounded-full bg-white/95 border px-2 py-1 text-xs shadow-sm hover:bg-white"
+            aria-label="Bewerken"
+            title="Bewerken"
+          >
+            ⋯
+          </button>
+
+          {/* HEART + counter (top-left) */}
+          <button
+            type="button"
+            onClick={toggleLike}
+            className={`absolute top-2 left-2 inline-flex items-center gap-1 rounded-full border px-2 py-1 text-xs shadow-sm ${liked ? 'bg-rose-50 border-rose-200 text-rose-700' : 'bg-white/95 hover:bg-white'}`}
+            aria-label="Favoriet"
+            title="Favoriet"
+          >
+            <span className="select-none">{liked ? '❤️' : '🤍'}</span>
+            <span className="tabular-nums">{likes}</span>
+          </button>
 
           {/* BADGES: stacked bottom-right (status above, price below) */}
           <div className="absolute right-2 bottom-2 flex flex-col items-end gap-2">
@@ -677,19 +714,7 @@ const [myVotes, setMyVotes] = useState({}); // { [itemId]: 1 | -1 | 0 }
       </div>
     )}
     {visible.map((it) => (
-      <div key={it.id} className="flex flex-col">
-        <SmartLinkPreview url={it.url} status={it.status} price={it.price} />
-        <div className="mt-2">
-          <button
-            type="button"
-            onClick={()=>setEditorItem(it)}
-            className="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs hover:bg-slate-50"
-          >
-            <span className="h-4 w-4 rounded-full grid place-items-center border">✏️</span>
-            Bewerken
-          </button>
-        </div>
-      </div>
+      <SmartLinkPreview key={it.id} item={it} url={it.url} status={it.status} price={it.price} onOpenEditor={()=>setEditorItem(it)} onUpdate={(patch)=>updateItem(it.id, patch)} />
     ))}
   </div>
 </section>
@@ -762,7 +787,8 @@ const [myVotes, setMyVotes] = useState({}); // { [itemId]: 1 | -1 | 0 }
         {/* Reviews Tab */}
         <section className={`${activeTab==='reviews' ? '' : 'hidden'} space-y-3`}>
           {items.length === 0 && (<div className="rounded-2xl border bg-white p-6 text-center text-slate-600">Nog geen woningen om te beoordelen.</div>)}
-          {items.map((it) => ((<div className="flex flex-col"> <article key={`rev-${it.id}`} className="rounded-2xl border bg-white p-4 shadow-sm">
+          {items.map((it) => (
+            <article key={`rev-${it.id}`} className="rounded-2xl border bg-white p-4 shadow-sm">
               <div className="flex flex-col gap-3">
                 <div className="grid gap-3 sm:grid-cols-[1fr,auto]">
                   <div className="grow">
@@ -819,7 +845,8 @@ const [myVotes, setMyVotes] = useState({}); // { [itemId]: 1 | -1 | 0 }
                   {it.status !== "bezichtigd" && (<p className="mt-2 text-xs text-slate-500">Tip: markeer de woning als "Bezichtigd" zodra je de beoordeling invult.</p>)}
                 </div>
               </div>
-            </article> <div className="mt-2"><button type="button" onClick={()=>setEditorItem(it)} className="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs hover:bg-slate-50"><span className="h-4 w-4 rounded-full grid place-items-center border">✏️</span> Bewerken</button></div></div>)))}
+            </article>
+          ))}
         </section>
       </div>
 
@@ -883,6 +910,7 @@ const [myVotes, setMyVotes] = useState({}); // { [itemId]: 1 | -1 | 0 }
 function PropertyEditor({ item, onClose, onUpdate }) {
   const [form, setForm] = useState({ ...item });
   const save = (patch) => { onUpdate?.(patch); };
+
   return (
     <div className="fixed inset-0 z-50">
       <div className="absolute inset-0 bg-black/30" onClick={onClose} />
