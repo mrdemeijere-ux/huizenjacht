@@ -2,9 +2,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 
 // === Huizenjacht – App (canoniek) ===
-
-// Helper: format price as EUR
-function fmtPrice(n){ const num=Number(n); if(!isFinite(num)||num<=0) return null; try{ return new Intl.NumberFormat("nl-NL",{style:"currency",currency:"EUR"}).format(num);}catch{ return `€ ${num}`; } }
 // Single-file MVP (React + Tailwind + Firestore realtime sync)
 // Altijd online opslag (Firestore, collection boards/global/items)
 // Functies:
@@ -16,7 +13,6 @@ function fmtPrice(n){ const num=Number(n); if(!isFinite(num)||num<=0) return nul
 // - Gemiddelde beoordeling als badge in "Alle woningen" en "Ingepland"
 
 // ===================== Firebase setup =====================
-
 import { initializeApp } from "firebase/app";
 import { getAuth, onAuthStateChanged, signInAnonymously } from "firebase/auth";
 import {
@@ -136,30 +132,6 @@ function validate(item) {
   return errors;
 }
 
-
-async function toggleLike(itemId) {
-  if (!currentUser) return;
-  const uid = currentUser.uid;
-  const ref = doc(db, COL, itemId);
-  await runTransaction(db, async (tx) => {
-    const snap = await tx.get(ref);
-    if (!snap.exists()) return;
-    const data = snap.data() || {};
-    const likedBy = { ...(data.likedBy || {}) };
-    let likesCount = Number(data.likesCount || 0);
-    if (likedBy[uid]) {
-      // Unlike
-      delete likedBy[uid];
-      likesCount = Math.max(0, likesCount - 1);
-    } else {
-      // Like
-      likedBy[uid] = true;
-      likesCount = likesCount + 1;
-    }
-    tx.update(ref, { likedBy, likesCount, updatedAt: serverTimestamp() });
-  });
-}
-
 function formatEUR(value) {
   try {
     if (value == null || value === "" || isNaN(Number(value))) return "";
@@ -190,18 +162,62 @@ function LinkChip({ url }) {
 }
 
 // Rijke link preview via serverless endpoint (optioneel)
-function SmartLinkPreview({ item, url, status, price, liked=false, likesCount=0, onToggleLike, onOpenEditor, onUpdate }) {
+function SmartLinkPreview({ item, url, status, price, onOpenEditor, onUpdate }) {
   if (!url) return null;
 
   const [meta, setMeta] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-    const parts = getUrlParts(url || "");
+  // Heart / likes (local optimistic UI)
+  const initialLikes = (item && (item.likes ?? item.up)) || 0;
+  const [likes, setLikes] = useState(initialLikes);
+  const [liked, setLiked] = useState(Boolean(item && item.liked));
+
+  const endpoint = import.meta?.env?.VITE_LINK_PREVIEW_ENDPOINT;
+  const parts = getUrlParts(url || "");
+
+  useEffect(() => {
+    let alive = true;
+    setError(null); setMeta(null);
+    if (!endpoint || !url) return;
+    setLoading(true);
+    const target = `${endpoint}?url=${encodeURIComponent(url)}`;
+    fetch(target)
+      .then(async (r) => {
+        if (!alive) return;
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        const data = await r.json();
+        if (data && (data.title || data.description || data.image)) setMeta(data);
+      })
+      .catch((e) => alive && setError(e?.message || String(e)))
+      .finally(() => alive && setLoading(false));
+    return () => { alive = false; };
+  }, [endpoint, url]);
+
   const title = meta?.title || parts.host || "Link";
   const subtitle = meta?.siteName || parts.host;
   const description = meta?.description;
-const priceText = fmtPrice(price);
+
+  const statusLabel = (s) => (typeof STATUS_OPTIONS !== 'undefined'
+    ? (STATUS_OPTIONS.find(o => o.value === s)?.label || s)
+    : s);
+  const fmtPrice = (n) => {
+    const num = Number(n);
+    if (!isFinite(num) || num <= 0) return null;
+    try { return new Intl.NumberFormat('nl-NL', { style: 'currency', currency: 'EUR' }).format(num); }
+    catch { return `€ ${num}`; }
+  };
+  const priceText = fmtPrice(price);
+
+  const toggleLike = (e) => {
+    e.preventDefault();
+    const nextLiked = !liked;
+    setLiked(nextLiked);
+    const nextLikes = Math.max(0, likes + (nextLiked ? 1 : -1));
+    setLikes(nextLikes);
+    onUpdate?.({ liked: nextLiked, likes: nextLikes, up: nextLikes });
+  };
 
   return (
     <a href={url} target="_blank" rel="noopener noreferrer" className="block group">
@@ -230,13 +246,13 @@ const priceText = fmtPrice(price);
           {/* HEART + counter (top-left) */}
           <button
             type="button"
-            onClick={(e)=>{ e.preventDefault(); onToggleLike && onToggleLike(); }}
-            className={`${'absolute top-2 left-2 inline-flex items-center gap-1 rounded-full border px-2 py-1 text-xs shadow-sm'} ${liked ? 'bg-rose-50 border-rose-200 text-rose-700' : 'bg-white/95 hover:bg-white'}`}
+            onClick={toggleLike}
+            className={`absolute top-2 left-2 inline-flex items-center gap-1 rounded-full border px-2 py-1 text-xs shadow-sm ${liked ? 'bg-rose-50 border-rose-200 text-rose-700' : 'bg-white/95 hover:bg-white'}`}
             aria-label="Favoriet"
             title="Favoriet"
           >
             <span className="select-none">{liked ? '❤️' : '🤍'}</span>
-            <span className="tabular-nums">{likesCount}</span>
+            <span className="tabular-nums">{likes}</span>
           </button>
 
           {/* BADGES: stacked bottom-right (status above, price below) */}
@@ -341,15 +357,6 @@ async function openOsmApprox(it, updateItem) {
 
 // ===================== App =====================
 export default function App() {
-  // Current user (anonymous allowed), used for per-user likes
-  const [currentUser, setCurrentUser] = useState(null);
-  useEffect(() => {
-    const auth = getAuth();
-    const unsub = onAuthStateChanged(auth, (u) => setCurrentUser(u));
-    try { if (!auth.currentUser) signInAnonymously(auth); } catch {}
-    return () => unsub && unsub();
-  }, []);
-
   const [items, setItems] = useState([]);
   const [editorItem, setEditorItem] = useState(null);
   const [form, setForm] = useState(emptyForm());
@@ -707,7 +714,7 @@ const [myVotes, setMyVotes] = useState({}); // { [itemId]: 1 | -1 | 0 }
       </div>
     )}
     {visible.map((it) => (
-      <SmartLinkPreview key={it.id} item={it} url={it.url} status={it.status} price={it.price} likesCount={Number(it.likesCount||0)} liked={Boolean(it.likedBy && currentUser && it.likedBy[currentUser.uid])} onToggleLike={()=>toggleLike(it.id)} onOpenEditor={()=>setEditorItem(it)} onUpdate={(patch)=>updateItem(it.id, patch)} />
+      <SmartLinkPreview key={it.id} item={it} url={it.url} status={it.status} price={it.price} onOpenEditor={()=>setEditorItem(it)} onUpdate={(patch)=>updateItem(it.id, patch)} />
     ))}
   </div>
 </section>
