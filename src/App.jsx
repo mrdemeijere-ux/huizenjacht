@@ -190,19 +190,17 @@ function SmartLinkPreview({ item, url, status, price, liked=false, likesCount=0,
   }, [endpoint, url]);
 
   const parts = getUrlParts(url || "");
-  const title = meta?.title || parts.host || "Link";
   const subtitle = meta?.siteName || parts.host;
-  const description = meta?.description;
   const priceText = (Number(price) > 0)
-  
     ? new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(Number(price))
     : null;
+
   const isActive = liked || Number(likesCount) > 0;
 
   return (
     <a href={url} target="_blank" rel="noopener noreferrer" className="block group">
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white hover:shadow-sm transition">
-        {/* Image area */}
+        {/* Alleen de afbeelding, de hele tegel is klikbaar */}
         <div className="relative w-full aspect-[4/3] bg-slate-100">
           {meta?.image ? (
             <img src={meta.image} alt="" className="absolute inset-0 h-full w-full object-cover" loading="lazy" />
@@ -212,31 +210,30 @@ function SmartLinkPreview({ item, url, status, price, liked=false, likesCount=0,
             </div>
           )}
 
-          {/* EDIT button (top-right) */}
+          {/* Hartje linksboven */}
           <button
-  type="button"
-  onClick={(e)=>{ e.preventDefault(); onToggleLike && onToggleLike(); }}
-  className={`absolute top-2 left-2 inline-flex items-center gap-1 rounded-full border px-2 py-1 text-xs shadow-sm ${isActive ? 'bg-rose-50 border-rose-200 text-rose-700' : 'bg-white/95 hover:bg-white'}`}
-  aria-label="Favoriet"
-  title="Favoriet"
->
-  <span className="select-none">{isActive ? '❤️' : '🤍'}</span>
-  <span className="tabular-nums">{likesCount}</span>
-</button>
+            type="button"
+            onClick={(e)=>{ e.preventDefault(); onToggleLike && onToggleLike(); }}
+            className={`absolute top-2 left-2 inline-flex items-center gap-1 rounded-full border px-2 py-1 text-xs shadow-sm ${isActive ? 'bg-rose-50 border-rose-200 text-rose-700' : 'bg-white/95 hover:bg-white'}`}
+            aria-label="Favoriet"
+            title="Favoriet"
+          >
+            <span className="select-none">{isActive ? '❤️' : '🤍'}</span>
+            <span className="tabular-nums">{likesCount}</span>
+          </button>
 
-          {/* HEART + counter (top-left) */}
+          {/* Bewerken-knop rechtsboven */}
           <button
-  type="button"
-  onClick={(e)=>{ e.preventDefault(); onToggleLike && onToggleLike(); }}
-  className={`absolute top-2 left-2 inline-flex items-center gap-1 rounded-full border px-2 py-1 text-xs shadow-sm ${isActive ? 'bg-rose-50 border-rose-200 text-rose-700' : 'bg-white/95 hover:bg-white'}`}
-  aria-label="Favoriet"
-  title="Favoriet"
->
-  <span className="select-none">{isActive ? '❤️' : '🤍'}</span>
-  <span className="tabular-nums">{likesCount}</span>
-</button>
+            type="button"
+            onClick={(e)=>{ e.preventDefault(); onOpenEditor?.(); }}
+            className="absolute top-2 right-2 rounded-full bg-white/95 border px-2 py-1 text-xs shadow-sm hover:bg-white"
+            aria-label="Bewerken"
+            title="Bewerken"
+          >
+            ⋯
+          </button>
 
-          {/* BADGES: stacked bottom-right (status above, price below) */}
+          {/* Badges rechtsonder (status boven, prijs onder) */}
           <div className="absolute right-2 bottom-2 flex flex-col items-end gap-2">
             {status && (
               <span className="rounded-full bg-blue-600/90 text-white text-xs px-2 py-1">
@@ -251,15 +248,6 @@ function SmartLinkPreview({ item, url, status, price, liked=false, likesCount=0,
               </span>
             )}
           </div>
-        </div>
-
-        {/* Text area */}
-        <div className="p-3">
-          <div className="text-sm font-semibold leading-snug line-clamp-2">{title}</div>
-          {description && (
-            <div className="mt-0.5 text-xs text-slate-600 leading-tight line-clamp-2">{description}</div>
-          )}
-          <div className="mt-1 text-[11px] text-slate-500 truncate">{subtitle}</div>
         </div>
       </div>
     </a>
