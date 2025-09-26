@@ -14,14 +14,6 @@ import React, { useEffect, useMemo, useState } from "react";
 
 // ===================== Firebase setup =====================
 
-// Current user (anonymous allowed), used for per-user likes
-const [currentUser, setCurrentUser] = useState(null);
-useEffect(() => {
-  const auth = getAuth();
-  const unsub = onAuthStateChanged(auth, (u) => setCurrentUser(u));
-  try { if (!auth.currentUser) signInAnonymously(auth); } catch {}
-  return () => unsub && unsub();
-}, []);
 import { initializeApp } from "firebase/app";
 import { getAuth, onAuthStateChanged, signInAnonymously } from "firebase/auth";
 import {
@@ -351,6 +343,15 @@ async function openOsmApprox(it, updateItem) {
 
 // ===================== App =====================
 export default function App() {
+  // Current user (anonymous allowed), used for per-user likes
+  const [currentUser, setCurrentUser] = useState(null);
+  useEffect(() => {
+    const auth = getAuth();
+    const unsub = onAuthStateChanged(auth, (u) => setCurrentUser(u));
+    try { if (!auth.currentUser) signInAnonymously(auth); } catch {}
+    return () => unsub && unsub();
+  }, []);
+
   const [items, setItems] = useState([]);
   const [editorItem, setEditorItem] = useState(null);
   const [form, setForm] = useState(emptyForm());
