@@ -169,11 +169,7 @@ function SmartLinkPreview({ item, url, status, price, liked=false, likesCount=0,
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  // Heart / likes (local optimistic UI)
-  const [liked, setLiked] = useState(Boolean(item && item.liked));
-
   const endpoint = import.meta?.env?.VITE_LINK_PREVIEW_ENDPOINT;
-  const parts = getUrlParts(url || "");
 
   useEffect(() => {
     let alive = true;
@@ -193,44 +189,44 @@ function SmartLinkPreview({ item, url, status, price, liked=false, likesCount=0,
     return () => { alive = false; };
   }, [endpoint, url]);
 
-  const title = meta?.title || parts.host || "Link";
+  const parts = getUrlParts(url || "");
   const subtitle = meta?.siteName || parts.host;
-  const description = meta?.description;
+const isSold = (() => {
+  const s = String(status || "").toLowerCase();
+  return s === "verkocht" || s === "sold" || s === "vendu";
+})();
+const priceText = (Number(price) > 0)
+  ? new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(Number(price))
+  : null;
 
-  const statusLabel = (s) => (typeof STATUS_OPTIONS !== 'undefined'
-    ? (STATUS_OPTIONS.find(o => o.value === s)?.label || s)
-    : s);
-  const fmtPrice = (n) => {
-    const num = Number(n);
-    if (!isFinite(num) || num <= 0) return null;
-    try { return new Intl.NumberFormat('nl-NL', { style: 'currency', currency: 'EUR' }).format(num); }
-    catch { return `€ ${num}`; }
-  };
-  const priceText = fmtPrice(price);
-
-  const toggleLike = (e) => {
-    e.preventDefault();
-    const nextLiked = !liked;
-    setLiked(nextLiked);
-    const nextLikes = Math.max(0, likes + (nextLiked ? 1 : -1));
-    setLikes(nextLikes);
-    onUpdate?.({ liked: nextLiked, likes: nextLikes, up: nextLikes });
-  };
+  const isActive = liked || Number(likesCount) > 0;
 
   return (
     <a href={url} target="_blank" rel="noopener noreferrer" className="block group">
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white hover:shadow-sm transition">
-        {/* Image area */}
-        <div className="relative w-full aspect-[4/3] bg-slate-100">
+        {/* Alleen de afbeelding, de hele tegel is klikbaar */}
+        <div className="relative w-full aspect-[2/3] md:aspect-[4/3] bg-slate-100">
           {meta?.image ? (
-            <img src={meta.image} alt="" className="absolute inset-0 h-full w-full object-cover" loading="lazy" />
+            <img src={meta.image} alt="" className={`absolute inset-0 h-full w-full object-cover transition ${isSold ? "grayscale" : ""}`} />
           ) : (
             <div className="absolute inset-0 grid place-items-center text-slate-400 text-xs">
               {subtitle}
             </div>
           )}
 
-          {/* EDIT button (top-right) */}
+          {/* Hartje linksboven */}
+          <button
+            type="button"
+            onClick={(e)=>{ e.preventDefault(); onToggleLike && onToggleLike(); }}
+            className={`absolute top-2 left-2 inline-flex items-center gap-1 rounded-full border px-2 py-1 text-xs shadow-sm ${isActive ? 'bg-rose-50 border-rose-200 text-rose-700' : 'bg-white/95 hover:bg-white'}`}
+            aria-label="Favoriet"
+            title="Favoriet"
+          >
+            <span className="select-none">{isActive ? '❤️' : '🤍'}</span>
+            <span className="tabular-nums">{likesCount}</span>
+          </button>
+
+          {/* Bewerken-knop rechtsboven */}
           <button
             type="button"
             onClick={(e)=>{ e.preventDefault(); onOpenEditor?.(); }}
@@ -241,40 +237,24 @@ function SmartLinkPreview({ item, url, status, price, liked=false, likesCount=0,
             ⋯
           </button>
 
-          {/* HEART + counter (top-left) */}
-          <button
-            type="button"
-            onClick={(e)=>{ e.preventDefault(); onToggleLike && onToggleLike(); }}
-            className={`absolute top-2 left-2 inline-flex items-center gap-1 rounded-full border px-2 py-1 text-xs shadow-sm ${liked ? 'bg-rose-50 border-rose-200 text-rose-700' : 'bg-white/95 hover:bg-white'}`}
-            aria-label="Favoriet"
-            title="Favoriet"
-          >
-            <span className="select-none">{liked ? '❤️' : '🤍'}</span>
-            <span className="tabular-nums">{likesCount}</span>
-          </button>
+          {/* Badges rechtsonder (status boven, prijs onder) */}
+          <div className="absolute right-2 bottom-2 flex flex-col items-end gap-2 text-right">
+  {status && (
+    <span
+  className={`inline-flex justify-end rounded-full text-white text-xs px-2 py-1 ${isSold ? "bg-red-600/90" : "bg-blue-600/90"}`}
+>
+  {typeof STATUS_OPTIONS !== 'undefined'
+    ? (STATUS_OPTIONS.find(o => o.value === status)?.label || status)
+    : status}
+</span>
 
-          {/* BADGES: stacked bottom-right (status above, price below) */}
-          <div className="absolute right-2 bottom-2 flex flex-col items-end gap-2">
-            {status && (
-              <span className="rounded-full bg-blue-600/90 text-white text-xs px-2 py-1">
-                {statusLabel(status)}
-              </span>
-            )}
-            {priceText && (
-              <span className="rounded-full bg-emerald-600/90 text-white text-xs px-2 py-1">
-                {priceText}
-              </span>
-            )}
-          </div>
-        </div>
-
-        {/* Text area */}
-        <div className="p-3">
-          <div className="text-sm font-semibold leading-snug line-clamp-2">{title}</div>
-          {description && (
-            <div className="mt-0.5 text-xs text-slate-600 leading-tight line-clamp-2">{description}</div>
-          )}
-          <div className="mt-1 text-[11px] text-slate-500 truncate">{subtitle}</div>
+  )}
+  {priceText && (
+    <span className="inline-flex justify-end rounded-full bg-emerald-600/90 text-white text-xs px-2 py-1 tabular-nums">
+      {priceText}
+    </span>
+  )}
+</div>
         </div>
       </div>
     </a>
