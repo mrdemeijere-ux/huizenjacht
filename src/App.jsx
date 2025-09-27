@@ -191,9 +191,13 @@ function SmartLinkPreview({ item, url, status, price, liked=false, likesCount=0,
 
   const parts = getUrlParts(url || "");
   const subtitle = meta?.siteName || parts.host;
-  const priceText = (Number(price) > 0)
-    ? new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(Number(price))
-    : null;
+const isSold = (() => {
+  const s = String(status || "").toLowerCase();
+  return s === "verkocht" || s === "sold" || s === "vendu";
+})();
+const priceText = (Number(price) > 0)
+  ? new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(Number(price))
+  : null;
 
   const isActive = liked || Number(likesCount) > 0;
 
@@ -203,7 +207,7 @@ function SmartLinkPreview({ item, url, status, price, liked=false, likesCount=0,
         {/* Alleen de afbeelding, de hele tegel is klikbaar */}
         <div className="relative w-full aspect-[2/3] md:aspect-[4/3] bg-slate-100">
           {meta?.image ? (
-            <img src={meta.image} alt="" className="absolute inset-0 h-full w-full object-cover" loading="lazy" />
+            <img src={meta.image} alt="" className={`absolute inset-0 h-full w-full object-cover transition ${isSold ? "grayscale" : ""}`} />
           ) : (
             <div className="absolute inset-0 grid place-items-center text-slate-400 text-xs">
               {subtitle}
@@ -236,11 +240,14 @@ function SmartLinkPreview({ item, url, status, price, liked=false, likesCount=0,
           {/* Badges rechtsonder (status boven, prijs onder) */}
           <div className="absolute right-2 bottom-2 flex flex-col items-end gap-2 text-right">
   {status && (
-    <span className="inline-flex justify-end rounded-full bg-blue-600/90 text-white text-xs px-2 py-1">
-      {typeof STATUS_OPTIONS !== 'undefined'
-        ? (STATUS_OPTIONS.find(o => o.value === status)?.label || status)
-        : status}
-    </span>
+    <span
+  className={`inline-flex justify-end rounded-full text-white text-xs px-2 py-1 ${isSold ? "bg-red-600/90" : "bg-blue-600/90"}`}
+>
+  {typeof STATUS_OPTIONS !== 'undefined'
+    ? (STATUS_OPTIONS.find(o => o.value === status)?.label || status)
+    : status}
+</span>
+
   )}
   {priceText && (
     <span className="inline-flex justify-end rounded-full bg-emerald-600/90 text-white text-xs px-2 py-1 tabular-nums">
