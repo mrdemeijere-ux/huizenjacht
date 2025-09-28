@@ -162,7 +162,7 @@ function LinkChip({ url }) {
 }
 
 // Rijke link preview via serverless endpoint (optioneel)
-function SmartLinkPreview({ item, url, status, price, liked=false, likesCount=0, onToggleLike, onOpenEditor, onUpdate }) {
+function SmartLinkPreview({ item, url, status, price, liked=false, likesCount=0, onToggleLike, onOpenEditor, onUpdate, onDelete }) {
   if (!url) return null;
 
   const [meta, setMeta] = useState(null);
@@ -200,6 +200,7 @@ const priceText = (Number(price) > 0)
   : null;
 
   const isActive = liked || Number(likesCount) > 0;
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   return (
     <a href={url} target="_blank" rel="noopener noreferrer" className="block group">
@@ -213,6 +214,39 @@ const priceText = (Number(price) > 0)
               {subtitle}
             </div>
           )}
+{/* Prullenbak linksonder */}
+<button
+  type="button"
+  onClick={(e)=>{ e.preventDefault(); setConfirmDelete(v=>!v); }}
+  className="absolute bottom-2 left-2 rounded-full bg-white/95 border px-2 py-1 text-xs shadow-sm hover:bg-white"
+  aria-label="Verwijderen"
+  title="Verwijderen"
+>
+  🗑️
+</button>
+
+{/* Bevestiging-popover */}
+{confirmDelete && (
+  <div className="absolute bottom-12 left-2 z-10 rounded-xl border bg-white shadow-lg p-2">
+    <div className="text-xs text-slate-600 px-2 py-1">Woning verwijderen?</div>
+    <div className="mt-1 flex items-center gap-2">
+      <button
+        type="button"
+        onClick={(e)=>{ e.preventDefault(); onDelete?.(); setConfirmDelete(false); }}
+        className="rounded-full bg-red-600 text-white text-xs px-3 py-1 hover:bg-red-700"
+      >
+        Ja, verwijderen
+      </button>
+      <button
+        type="button"
+        onClick={(e)=>{ e.preventDefault(); setConfirmDelete(false); }}
+        className="rounded-full border text-xs px-3 py-1 hover:bg-slate-50"
+      >
+        Annuleren
+      </button>
+    </div>
+  </div>
+)}
 
           {/* Hartje linksboven */}
           <button
@@ -692,7 +726,19 @@ const [myVotes, setMyVotes] = useState({}); // { [itemId]: 1 | -1 | 0 }
       </div>
     )}
     {visible.map((it) => (
-      <SmartLinkPreview key={it.id} item={it} url={it.url} status={it.status} price={it.price} liked={myVotes[it.id]===1} likesCount={Number(it.likes)||0} onToggleLike={()=>castVote(it.id, 1)} onOpenEditor={()=>setEditorItem(it)} onUpdate={(patch)=>updateItem(it.id, patch)} />
+      <SmartLinkPreview
+  key={it.id}
+  item={it}
+  url={it.url}
+  status={it.status}
+  price={it.price}
+  liked={myVotes[it.id]===1}
+  likesCount={Number(it.likes)||0}
+  onToggleLike={()=>castVote(it.id, 1)}
+  onOpenEditor={()=>setEditorItem(it)}
+  onUpdate={(patch)=>updateItem(it.id, patch)}
+  onDelete={()=>remove(it.id)}   // ✅ nieuw
+/>
     ))}
   </div>
 </section>
