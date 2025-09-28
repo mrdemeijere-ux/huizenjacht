@@ -212,23 +212,25 @@ const priceText = (Number(price) > 0)
           ) : (
             <div className="absolute inset-0 grid place-items-center text-slate-400 text-xs">
               {subtitle}
-        {/* Bevestiging-popover — altijd binnen de image-container houden */}
+        {/* Bevestiging-popover — binnen de image-container */}
 {confirmDelete && (
   <div className="absolute z-20 left-2 right-2 bottom-12">
-    <div className="rounded-xl border bg-white shadow-lg p-2">
-      <div className="text-xs text-slate-600 px-2 py-1">Woning verwijderen?</div>
-      <div className="mt-1 flex items-center gap-2">
+    <div className="rounded-xl border bg-white shadow-lg p-3">
+      <div className="text-xs text-slate-600 mb-2">Woning verwijderen?</div>
+
+      {/* Knoppen onder elkaar */}
+      <div className="flex flex-col gap-2">
         <button
           type="button"
           onClick={(e)=>{ e.preventDefault(); onDelete?.(); setConfirmDelete(false); }}
-          className="rounded-full bg-red-600 text-white text-xs px-3 py-1 hover:bg-red-700"
+          className="w-full rounded-full bg-red-600 text-white text-sm px-4 py-2 hover:bg-red-700"
         >
           Ja, verwijderen
         </button>
         <button
           type="button"
           onClick={(e)=>{ e.preventDefault(); setConfirmDelete(false); }}
-          className="rounded-full border text-xs px-3 py-1 hover:bg-slate-50"
+          className="w-full rounded-full border text-sm px-4 py-2 hover:bg-slate-50"
         >
           Annuleren
         </button>
