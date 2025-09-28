@@ -204,53 +204,55 @@ const priceText = (Number(price) > 0)
 
   return (
     <a href={url} target="_blank" rel="noopener noreferrer" className="block group">
-      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white hover:shadow-sm transition">
+      <div className={`relative overflow-hidden rounded-2xl border border-slate-200 bg-white hover:shadow-sm transition ${confirmDelete ? "z-10" : ""}`}>
         {/* Alleen de afbeelding, de hele tegel is klikbaar */}
         <div className="relative w-full aspect-[2/3] md:aspect-[2/3] bg-slate-100">
           {meta?.image ? (
-            <img src={meta.image} alt="" className={`absolute inset-0 h-full w-full object-cover transition ${isSold ? "grayscale" : ""}`} />
+            <img
+              src={meta.image}
+              alt=""
+              className={`absolute inset-0 h-full w-full object-cover transition ${isSold ? "grayscale" : ""}`}
+            />
           ) : (
             <div className="absolute inset-0 grid place-items-center text-slate-400 text-xs">
               {subtitle}
-        {/* Bevestiging-popover — binnen de image-container */}
-{confirmDelete && (
-  <div className="absolute z-20 left-2 right-2 bottom-12">
-    <div className="rounded-xl border bg-white shadow-lg p-3">
-      <div className="text-xs text-slate-600 mb-2">Woning verwijderen?</div>
+            </div>
+          )}
+          {/* ✅ Popover als sibling, altijd binnen dezelfde relative image-container */}
+          {confirmDelete && (
+            <div className="absolute z-50 left-2 right-2 bottom-12">
+              <div className="rounded-xl border bg-white shadow-lg p-3">
+                <div className="text-xs text-slate-600 mb-2">Woning verwijderen?</div>
+                <div className="flex flex-col gap-2">
+                  <button
+                    type="button"
+                    onClick={(e)=>{ e.preventDefault(); onDelete?.(); setConfirmDelete(false); }}
+                    className="w-full rounded-full bg-red-600 text-white text-sm px-4 py-2 hover:bg-red-700"
+                  >
+                    Verwijderen
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e)=>{ e.preventDefault(); setConfirmDelete(false); }}
+                    className="w-full rounded-full border text-sm px-4 py-2 hover:bg-slate-50"
+                  >
+                    Annuleren
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
-      {/* Knoppen onder elkaar */}
-      <div className="flex flex-col gap-2">
-        <button
-          type="button"
-          onClick={(e)=>{ e.preventDefault(); onDelete?.(); setConfirmDelete(false); }}
-          className="w-full rounded-full bg-red-600 text-white text-sm px-4 py-2 hover:bg-red-700"
-        >
-          Verwijderen
-        </button>
-        <button
-          type="button"
-          onClick={(e)=>{ e.preventDefault(); setConfirmDelete(false); }}
-          className="w-full rounded-full border text-sm px-4 py-2 hover:bg-slate-50"
-        >
-          Annuleren
-        </button>
-      </div>
-    </div>
-  </div>
-)}
-
-  </div>
-)}
-{/* Prullenbak linksonder */}
-<button
-  type="button"
-  onClick={(e)=>{ e.preventDefault(); setConfirmDelete(v=>!v); }}
-  className="absolute bottom-2 left-2 rounded-full bg-white/95 border px-2 py-1 text-xs shadow-sm hover:bg-white"
-  aria-label="Verwijderen"
-  title="Verwijderen"
->
-  🗑️
-</button>
+          {/* Prullenbak linksonder */}
+          <button
+            type="button"
+            onClick={(e)=>{ e.preventDefault(); setConfirmDelete(v=>!v); }}
+            className="absolute bottom-2 left-2 rounded-full bg-white/95 border px-2 py-1 text-xs shadow-sm hover:bg-white"
+            aria-label="Verwijderen"
+            title="Verwijderen"
+          >
+            🗑️
+          </button>
 
           {/* Hartje linksboven */}
           <button
@@ -277,22 +279,21 @@ const priceText = (Number(price) > 0)
 
           {/* Badges rechtsonder (status boven, prijs onder) */}
           <div className="absolute right-2 bottom-2 flex flex-col items-end gap-2 text-right">
-  {status && (
-    <span
-  className={`inline-flex justify-end rounded-full text-white text-xs px-2 py-1 ${isSold ? "bg-red-600/90" : "bg-blue-600/90"}`}
->
-  {typeof STATUS_OPTIONS !== 'undefined'
-    ? (STATUS_OPTIONS.find(o => o.value === status)?.label || status)
-    : status}
-</span>
-
-  )}
-  {priceText && (
-    <span className="inline-flex justify-end rounded-full bg-emerald-600/90 text-white text-xs px-2 py-1 tabular-nums">
-      {priceText}
-    </span>
-  )}
-</div>
+            {status && (
+              <span
+                className={`inline-flex justify-end rounded-full text-white text-xs px-2 py-1 ${isSold ? "bg-red-600/90" : "bg-blue-600/90"}`}
+              >
+                {typeof STATUS_OPTIONS !== 'undefined'
+                  ? (STATUS_OPTIONS.find(o => o.value === status)?.label || status)
+                  : status}
+              </span>
+            )}
+            {priceText && (
+              <span className="inline-flex justify-end rounded-full bg-emerald-600/90 text-white text-xs px-2 py-1 tabular-nums">
+                {priceText}
+              </span>
+            )}
+          </div>
         </div>
       </div>
     </a>
