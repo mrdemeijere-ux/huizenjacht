@@ -219,29 +219,30 @@ const priceText = (Number(price) > 0)
             </div>
           )}
           {/* ✅ Popover als sibling, altijd binnen dezelfde relative image-container */}
-          {confirmDelete && (
-            <div className="absolute z-50 left-2 right-2 bottom-12">
-              <div className="rounded-xl border bg-white shadow-lg p-3">
-                <div className="text-xs text-slate-600 mb-2">Woning verwijderen?</div>
-                <div className="flex flex-col gap-2">
-                  <button
-                    type="button"
-                    onClick={(e)=>{ e.preventDefault(); onDelete?.(); setConfirmDelete(false); }}
-                    className="w-full rounded-full bg-red-600 text-white text-sm px-4 py-2 hover:bg-red-700"
-                  >
-                    Verwijderen
-                  </button>
-                  <button
-                    type="button"
-                    onClick={(e)=>{ e.preventDefault(); setConfirmDelete(false); }}
-                    className="w-full rounded-full border text-sm px-4 py-2 hover:bg-slate-50"
-                  >
-                    Annuleren
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
+{confirmDelete && (
+  <div className="absolute z-50 left-2 right-2 bottom-24 md:bottom-12">
+    <div className="rounded-xl border bg-white shadow-lg p-3">
+      <div className="text-xs text-slate-600 mb-2">Woning verwijderen?</div>
+      <div className="flex flex-col gap-2">
+        <button
+          type="button"
+          onClick={(e)=>{ e.preventDefault(); onDelete?.(); setConfirmDelete(false); }}
+          className="w-full rounded-full bg-red-600 text-white text-sm px-4 py-2 hover:bg-red-700"
+        >
+          Ja, verwijderen
+        </button>
+        <button
+          type="button"
+          onClick={(e)=>{ e.preventDefault(); setConfirmDelete(false); }}
+          className="w-full rounded-full border text-sm px-4 py-2 hover:bg-slate-50"
+        >
+          Annuleren
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+
 
           {/* Prullenbak linksonder */}
           <button
