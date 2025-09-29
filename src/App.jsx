@@ -204,7 +204,7 @@ const priceText = (Number(price) > 0)
 
   return (
     <a href={url} target="_blank" rel="noopener noreferrer" className="block group">
-      <div className={`relative overflow-hidden rounded-2xl border border-slate-200 bg-white hover:shadow-sm transition ${confirmDelete ? "z-10" : ""}`}>
+      <div className={`relative overflow-hidden rounded-2xl border border-slate-200 bg-white hover:shadow-sm transition ${confirmDelete ? "z-50" : ""}`}>
         {/* Alleen de afbeelding, de hele tegel is klikbaar */}
         <div className="relative w-full aspect-[2/3] md:aspect-[2/3] bg-slate-100">
           {meta?.image ? (
