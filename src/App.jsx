@@ -565,7 +565,7 @@ const [myVotes, setMyVotes] = useState({}); // { [itemId]: 1 | -1 | 0 }
 
   // ===================== Render =====================
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white text-slate-900 pb-24">
+    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white text-slate-900 pb-36">
       <TopStatusBar liveStatus={liveStatus} />
       <div className="mx-auto max-w-6xl p-6">
         <header className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
