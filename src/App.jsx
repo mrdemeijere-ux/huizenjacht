@@ -1,5 +1,6 @@
 // Canvas refresh — volledige inhoud opnieuw gesynchroniseerd
 import React, { useEffect, useMemo, useState } from "react";
+import ScheduledMap from "./ScheduledMap";
 
 // === Huizenjacht – App (canoniek) ===
 // Single-file MVP (React + Tailwind + Firestore realtime sync)
@@ -826,6 +827,15 @@ async function updateItem(id, patch) {
 
         {/* Ingeplande bezichtigingen */}
         <section className={`${activeTab==='scheduled' ? '' : 'hidden'} space-y-3`}>
+                    {/* Kaart met ingeplande woningen */}
+          <div className="mb-3">
+            <h3 className="px-2 pb-2 text-sm font-semibold text-slate-700">Kaart</h3>
+            <ScheduledMap
+              items={scheduledVisible}              // jouw ingeplande lijst
+              active={activeTab === 'scheduled'}    // invalidateSize bij tab wissel
+              heightClass="h-[60vh]"                // hoogte naar smaak
+            />
+          </div>
           {scheduledVisible.length === 0 && (<div className="rounded-2xl border bg-white p-6 text-center text-slate-600">Geen ingeplande bezichtigingen.</div>)}
           {scheduledVisible.map((it) => (
             <article key={`sched-${it.id}`} className="rounded-2xl border bg-white p-4 shadow-sm">
