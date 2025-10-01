@@ -148,6 +148,58 @@ function getUrlParts(u) {
   } catch { return { host: u, path: "" }; }
 }
 function hostInitial(host) { const h = (host || "?").trim(); return (h[0] || "?").toUpperCase(); }
+// --- Rough place extractor: haal een globale plek uit de URL (domein-specifiek + fallback)
+function urlToRoughPlace(url) {
+  try {
+    const u = new URL(url);
+    const host = u.hostname.replace(/^www\./, "");
+    const path = u.pathname.toLowerCase();
+    const cap = (s) => s.replace(/\b\w/g, c => c.toUpperCase());
+
+    // Le Figaro (bv.): /annonces/propriete-dordogne-aquitaine-france/86831135/
+    if (host.endsWith("lefigaro.fr")) {
+      const m = path.match(/propriete-([a-z0-9\-]+)-france/);
+      if (m) return cap(m[1].replace(/-/g, " ")) + ", France";
+    }
+
+    // Generieke fallback: neem betekenisvolle tokens uit het pad
+    const parts = path.split(/[\/\-_,]+/).filter(Boolean);
+    const bad = new Set([
+      "annonces","annonce","propriete","proprietes","maison","appartement",
+      "house","apartment","france","achat","vente","immobilier","property","listing","ref","id"
+    ]);
+    const cand = parts.filter(t => !bad.has(t) && !/^\d+$/.test(t)).slice(0, 4);
+    if (cand.length) return cap(cand.join(" "));
+    return cap(host.split(".")[0]);
+  } catch {
+    return null;
+  }
+}
+
+// --- Enrich: als item geen lat/lng heeft -> approx geocode via /api/geocode (of VITE_GEOCODE_ENDPOINT)
+async function enrichItemWithApproxGeo(item, updateItem) {
+  try {
+    if (!item?.id) return;
+    const hasGeo = Number.isFinite(item.lat) && Number.isFinite(item.lng);
+    if (hasGeo) return;
+
+    const rough = urlToRoughPlace(item.url || "");
+    if (!rough) return;
+
+    const r = await fetch(`${GEOCODE_ENDPOINT}?q=${encodeURIComponent(rough)}`);
+    const data = await r.json();
+    if (data?.ok && Number.isFinite(data.lat) && Number.isFinite(data.lng)) {
+      await updateItem(item.id, {
+        lat: data.lat,
+        lng: data.lng,
+        geoSource: "approx-url",
+        geoQuery: rough,
+      });
+    }
+  } catch (e) {
+    console.warn("approx geocode failed:", e);
+  }
+}
 
 // Compacte link-chip
 function LinkChip({ url }) {
@@ -452,8 +504,18 @@ const [myVotes, setMyVotes] = useState({}); // { [itemId]: 1 | -1 | 0 }
     if (Object.keys(errs).length) return;
     const { id: _drop, ...payload } = form;
     const withMeta = { ...payload, createdAt: serverTimestamp(), order: Date.now() };
-    try { await addDoc(collection(db, "boards", boardId, "items"), withMeta); resetForm(); setActiveTab("all"); }
-    catch (err) { alert("Opslaan in Firestore mislukt: " + (err?.message || String(err))); }
+    try {
+  const ref = await addDoc(collection(db, "boards", boardId, "items"), withMeta);
+  // approx geocode op basis van de URL (niets aan UI veranderen)
+  const newItem = { id: ref.id, ...withMeta };
+  enrichItemWithApproxGeo(newItem, updateItem);
+
+  resetForm();
+  setActiveTab("all");
+} catch (err) {
+  alert("Opslaan in Firestore mislukt: " + (err?.message || String(err)));
+}
+
   }
 
   function startEdit(it) { setEditingId(it.id); setForm({ ...it }); setActiveTab("new"); }
@@ -488,10 +550,23 @@ const [myVotes, setMyVotes] = useState({}); // { [itemId]: 1 | -1 | 0 }
     } catch (err) { alert("Volgorde wijzigen mislukt: " + (err?.message || String(err))); }
   }
 
-  async function updateItem(id, patch) {
-    try { await updateDoc(doc(db, "boards", boardId, "items", id), patch); }
-    catch (err) { alert("Opslaan mislukt: " + (err?.message || String(err))); }
+async function updateItem(id, patch) {
+  try {
+    await updateDoc(doc(db, "boards", boardId, "items", id), patch);
+
+    // ⬇️ approx geocode na update (als URL wijzigde of nog geen lat/lng is)
+    const urlChanged = Object.prototype.hasOwnProperty.call(patch, "url");
+    const current = items.find((x) => x.id === id) || {};
+    const itemAfter = { ...current, ...patch, id };
+
+    const missingGeo = !(Number.isFinite(itemAfter.lat) && Number.isFinite(itemAfter.lng));
+    if (urlChanged || missingGeo) {
+      enrichItemWithApproxGeo(itemAfter, updateItem);
+    }
+  } catch (err) {
+    alert("Opslaan mislukt: " + (err?.message || String(err)));
   }
+}
 
   async function updateRating(id, key, val) {
     const it = items.find((x) => x.id === id);
