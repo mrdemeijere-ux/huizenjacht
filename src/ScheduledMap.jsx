@@ -187,7 +187,7 @@ React.useEffect(() => {
             <Tooltip permanent direction="top" offset={[0, -18]} opacity={1}>
   <div className="flex flex-col items-center gap-1">
     {/* Mini preview bovenaan, groter */}
-    {p.url ? <MiniThumb url={p.url} size={56} radius="rounded-lg" /> : null}
+    {p.url ? <MiniThumb url={p.url} size={72} radius="rounded-lg" /> : null}
 
     {/* Prijs-badge eronder */}
     {Number.isFinite(Number(p.price)) ? (
