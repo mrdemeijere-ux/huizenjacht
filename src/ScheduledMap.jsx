@@ -115,6 +115,26 @@ const points = useMemo(() => {
     })
     .filter(Boolean);
 }, [items]);
+
+// Bereid bounds voor (ook als beide markers identiek zijn)
+const leafletBounds = React.useMemo(() => {
+  if (!points.length) return null;
+  if (points.length === 1) {
+    const p = points[0];
+    return L.latLngBounds(
+      [p.lat - 0.01, p.lng - 0.01],
+      [p.lat + 0.01, p.lng + 0.01]
+    );
+  }
+  const coords = points.map(p => [p.lat, p.lng]);
+  const uniq = new Set(coords.map(([a,b]) => `${a},${b}`));
+  if (uniq.size === 1) {
+    const [lat, lng] = coords[0];
+    return L.latLngBounds([lat - 0.01, lng - 0.01], [lat + 0.01, lng + 0.01]);
+  }
+  return L.latLngBounds(coords);
+}, [points]);
+
 // --- Robust fit: remount on relevant changes + fit after invalidateSize
 const mapRef = useRef(null);
 
@@ -192,23 +212,21 @@ useEffect(() => {
 
   return (
     <div className={`w-full overflow-hidden rounded-2xl border border-slate-200 bg-white ${heightClass}`}>
-      <MapContainer
+<MapContainer
   key={pointsKey}
   whenCreated={(map) => {
-  mapRef.current = map;
-  setTimeout(fit, 50);         // na mount
-  map.once("load", () => {     // na tiles laden
+    mapRef.current = map;
     setTimeout(fit, 50);
-    setTimeout(fit, 200);
-  });
-}}
-
-  center={center}
-  zoom={zoom}
+    map.once("load", () => {
+      setTimeout(fit, 50);
+      setTimeout(fit, 200);
+    });
+  }}
+  bounds={leafletBounds || undefined}
+  boundsOptions={{ padding: [20, 20], maxZoom: 15 }}
   scrollWheelZoom
   className="h-full w-full"
 >
-
         <TileLayer
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'

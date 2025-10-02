@@ -830,11 +830,13 @@ async function updateItem(id, patch) {
                     {/* Kaart met ingeplande woningen */}
           <div className="mb-3">
             <h3 className="px-2 pb-2 text-sm font-semibold text-slate-700">Kaart</h3>
-            <ScheduledMap
-              items={scheduledVisible}              // jouw ingeplande lijst
-              active={activeTab === 'scheduled'}    // invalidateSize bij tab wissel
-              heightClass="h-[60vh]"                // hoogte naar smaak
-            />
+            {activeTab === 'scheduled' && (
+  <ScheduledMap
+    items={scheduledVisible}
+    active={true}               // altijd true, hij bestaat alleen in deze tab
+    heightClass="h-[60vh]"
+  />
+)}
           </div>
           {scheduledVisible.length === 0 && (<div className="rounded-2xl border bg-white p-6 text-center text-slate-600">Geen ingeplande bezichtigingen.</div>)}
           {scheduledVisible.map((it) => (
