@@ -109,7 +109,7 @@ const points = useMemo(() => {
             </Popup>
           </Marker>
         ))}
-        <FitBounds points={points} active={active} />
+        <FitToMarkers points={points} active={active} />
       </MapContainer>
     </div>
   );
