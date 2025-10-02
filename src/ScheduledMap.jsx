@@ -1,5 +1,5 @@
 // src/ScheduledMap.jsx
-import React, { useEffect, useMemo , useRef} from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { MapContainer, TileLayer, Marker, Popup, Tooltip, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -10,6 +10,44 @@ L.Icon.Default.mergeOptions({
   iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
   shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
 });
+// ---- Mini link preview (thumbnail + titel + host) ----
+const LINK_PREVIEW_ENDPOINT =
+  import.meta?.env?.VITE_LINK_PREVIEW_ENDPOINT || "/api/link-preview";
+
+function MiniLinkPreview({ url, titleFallback }) {
+  const [meta, setMeta] = useState(null);
+
+  useEffect(() => {
+    let alive = true;
+    async function run() {
+      try {
+        if (!url) return;
+        const r = await fetch(`${LINK_PREVIEW_ENDPOINT}?url=${encodeURIComponent(url)}`);
+        if (!r.ok) return;
+        const j = await r.json();
+        if (alive) setMeta(j);
+      } catch {}
+    }
+    run();
+    return () => { alive = false; };
+  }, [url]);
+
+  const title = meta?.title || titleFallback || url;
+  const image = meta?.image;
+  const host = (() => { try { return new URL(url).hostname.replace(/^www\./,''); } catch { return ""; } })();
+
+  return (
+    <a href={url} target="_blank" rel="noreferrer" className="flex items-center gap-3 no-underline">
+      <div className="h-12 w-12 rounded-lg overflow-hidden bg-slate-100 border">
+        {image ? <img src={image} alt="" className="h-full w-full object-cover" /> : null}
+      </div>
+      <div className="min-w-0">
+        <div className="text-sm font-medium leading-snug line-clamp-2">{title}</div>
+        <div className="text-xs text-slate-500 truncate">{host}</div>
+      </div>
+    </a>
+  );
+}
 
 function FitToMarkers({ points, active }) {
   const map = useMap();
@@ -75,6 +113,7 @@ const points = useMemo(() => {
         title: i.title,
         url: i.url,
         price: i.price,
+        status: i.status,
       };
     })
     .filter(Boolean);
@@ -125,7 +164,24 @@ React.useEffect(() => {
 
   return (
     <div className={`w-full overflow-hidden rounded-2xl border border-slate-200 bg-white ${heightClass}`}>
-      <MapContainer key={pointsKey} whenCreated={(map) => { mapRef.current = map; setTimeout(fit, 50); }} center={center} zoom={zoom} scrollWheelZoom={true} className="h-full w-full">
+      <MapContainer
+  key={pointsKey}
+  whenCreated={(map) => {
+    mapRef.current = map;
+    // eerste fit na mount
+    setTimeout(fit, 50);
+    // nogmaals fit wanneer de kaart/tiles klaar zijn (iOS/Safari timing)
+    map.once("load", () => {
+      setTimeout(fit, 50);
+      setTimeout(fit, 200);
+    });
+  }}
+  center={center}
+  zoom={zoom}
+  scrollWheelZoom
+  className="h-full w-full"
+>
+
         <TileLayer
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
@@ -153,29 +209,34 @@ React.useEffect(() => {
   </div>
 </Tooltip>
             <Popup>
-  <div className="text-sm max-w-[240px]">
-    <div className="font-medium leading-snug line-clamp-2">
-      {p.title || p.url || "Woning"}
-    </div>
+  <div className="text-sm max-w-[260px]">
+    {/* Mini link preview */}
+    {p.url ? (
+      <MiniLinkPreview url={p.url} titleFallback={p.title} />
+    ) : (
+      <div className="font-medium leading-snug">{p.title || "Woning"}</div>
+    )}
+
+    {/* Badges in pill-stijl (zoals tiles) */}
     <div className="mt-2 flex flex-wrap items-center gap-2">
       {p.status ? (
-        <span className={`inline-flex items-center rounded-full px-2 py-1 text-[11px] text-white ${String(p.status).toLowerCase()==="verkocht" ? "bg-red-600" : "bg-blue-600"}`}>
+        <span
+          className={`inline-flex items-center rounded-full px-2 py-1 text-[11px] text-white
+            ${String(p.status).toLowerCase()==="verkocht" ? "bg-red-600" : "bg-blue-600"}`}
+        >
           {p.status}
         </span>
       ) : null}
+
       {Number.isFinite(Number(p.price)) ? (
         <span className="inline-flex items-center rounded-full px-2 py-1 text-[11px] text-white bg-emerald-600 tabular-nums">
           {new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(Number(p.price))}
         </span>
       ) : null}
     </div>
-    {p.url ? (
-      <div className="mt-2">
-        <a href={p.url} target="_blank" rel="noreferrer" className="text-blue-600 underline">Open link</a>
-      </div>
-    ) : null}
   </div>
 </Popup>
+
           </Marker>
         ))}
 </MapContainer>
