@@ -215,7 +215,12 @@ function LinkChip({ url }) {
 }
 
 // Rijke link preview via serverless endpoint (optioneel)
-function SmartLinkPreview({ item, url, status, price, liked=false, likesCount=0, onToggleLike, onOpenEditor, onUpdate, onDelete }) {
+function SmartLinkPreview({
+item, url, status, price, liked, likesCount=0,
+onToggleLike, onOpenEditor, onUpdate, onDelete,
+viewingAt,                // optioneel
+badgeVariant = "status",  // "status" (default) | "viewing"
+}) {
   if (!url) return null;
 
   const [meta, setMeta] = useState(null);
@@ -331,23 +336,33 @@ const priceText = (Number(price) > 0)
             ⋯
           </button>
 
-          {/* Badges rechtsonder (status boven, prijs onder) */}
-          <div className="absolute right-2 bottom-2 flex flex-col items-end gap-2 text-right">
-            {status && (
-              <span
-                className={`inline-flex justify-end rounded-full text-white text-xs px-2 py-1 ${isSold ? "bg-red-600/90" : "bg-blue-600/90"}`}
-              >
-                {typeof STATUS_OPTIONS !== 'undefined'
-                  ? (STATUS_OPTIONS.find(o => o.value === status)?.label || status)
-                  : status}
-              </span>
-            )}
-            {priceText && (
-              <span className="inline-flex justify-end rounded-full bg-emerald-600/90 text-white text-xs px-2 py-1 tabular-nums">
-                {priceText}
-              </span>
-            )}
-          </div>
+          {/* Badges rechtsonder (boven = status óf viewing, onder = prijs) */}
+<div className="absolute right-2 bottom-2 flex flex-col items-end gap-2 text-right">
+  {/* Bovenste pill: switch op variant */}
+  {badgeVariant === "viewing"
+    ? (viewingAt ? (
+        <span className="inline-flex justify-end rounded-full bg-indigo-600/90 text-white text-xs px-2 py-1">
+          {formatViewing(viewingAt?.seconds ? viewingAt.seconds * 1000 : viewingAt)}
+        </span>
+      ) : null)
+    : (status ? (
+        <span
+          className={`inline-flex justify-end rounded-full text-white text-xs px-2 py-1 ${isSold ? "bg-red-600/90" : "bg-blue-600/90"}`}
+        >
+          {typeof STATUS_OPTIONS !== 'undefined'
+            ? (STATUS_OPTIONS.find(o => o.value === status)?.label || status)
+            : status}
+        </span>
+      ) : null)
+  }
+
+  {/* Onderste pill: prijs (altijd onder) */}
+  {priceText && (
+    <span className="inline-flex justify-end rounded-full bg-emerald-600/90 text-white text-xs px-2 py-1 tabular-nums">
+      {priceText}
+    </span>
+  )}
+</div>
         </div>
       </div>
     </a>
@@ -839,75 +854,23 @@ async function updateItem(id, patch) {
 )}
           </div>
           {scheduledVisible.length === 0 && (<div className="rounded-2xl border bg-white p-6 text-center text-slate-600">Geen ingeplande bezichtigingen.</div>)}
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
             {scheduledVisible.map((it) => (
-            <article key={`sched-${it.id}`} className="rounded-2xl border bg-white p-4 shadow-sm">
-              <div className="flex flex-col gap-3">
-                <div className="grid gap-3 sm:grid-cols-[1fr,auto]">
-                  <div className="grow">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="text-lg font-semibold">{it.title || "(Geen titel)"}</h3>
-                      {it.viewingAt ? (
-                        <span className="inline-flex items-center rounded-full px-2 py-1 text-[11px] text-white bg-indigo-600">
-                          {formatViewing(it.viewingAt)}
-                        </span>
-                        ) : (it.status && it.status !== 'scheduled') ? (
-                        <span className={badgeClass(it.status)}>
-                        {STATUS_OPTIONS.find((s) => s.value === it.status)?.label || it.status}
-                        </span>
-                        ) : null}
-
-                      {it.url && <LinkChip url={it.url} />}
-                      {Number(it.price) > 0 && (<span className="ml-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">{formatEUR(it.price)}</span>)}
-                      {averageRating(it.ratings) > 0 && (<span className="ml-1 rounded-full bg-yellow-50 px-2 py-0.5 text-xs font-medium text-amber-700">⭐ {averageRating(it.ratings)}/5</span>)}
-                    </div>
-                    {it.viewingAt && (<p className="mt-1 text-sm text-slate-700">📅 Bezichtiging: {formatViewing(it.viewingAt)}</p>)}
-                    <p className="text-sm text-slate-700">
-                      {it.address && <span>{it.address}, </span>}
-                      {[it.postalCode, it.city].filter(Boolean).join(" ")}
-                      {it.country ? `, ${it.country}` : ""}
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap items-start justify-start gap-2 self-start sm:flex-nowrap sm:justify-end sm:min-w-max sm:whitespace-nowrap">
-                    <button onClick={() => openOsmApprox(it, updateItem)} className="inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm shadow-sm hover:bg-slate-50">
-                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4"><path d="M9 3.5L3.5 5v15L9 18.5l6 2.5 5.5-1.5v-15L15 5.5 9 3.5zm6 3.31l3-.82v12.02l-3 .82V6.81zM8 5.19l5 2.08v12.54l-5-2.08V5.19zM5 6.06l2-.55v12.52l-2 .55V6.06z"/></svg>
-                      Toon op OSM
-                    </button>
-                    <button onClick={() => startEdit(it)} className="rounded-xl border px-3 py-2 text-sm shadow-sm hover:bg-slate-50">Bewerken</button>
-                  </div>
-                </div>
-                {it.url && <SmartLinkPreview url={it.url} />}
-
-                {/* Likes / Dislikes */}
-                <div className="mt-2 flex items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={() => castVote(it.id, 1)}
-                    aria-pressed={myVotes[it.id] === 1}
-                    className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-sm transition ${myVotes[it.id] === 1 ? "bg-emerald-50 border-emerald-200 text-emerald-700" : "hover:bg-slate-50"}`}
-                    title="Vind ik leuk"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M2 10h4v10H2V10Zm6.3 10h7.36a3 3 0 0 0 2.94-2.43l1.03-5.67A3 3 0 0 0 16.69 8H13V6a3 3 0 0 0-3-3h-.5a1 1 0 0 0-1 1.2l.7 3.5A2 2 0 0 1 8.25 9L8 10.5V20.5c.08.32.33.5.3.5Z"/>
-                    </svg>
-                    <span>{Number(it.likes) || 0}</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => castVote(it.id, -1)}
-                    aria-pressed={myVotes[it.id] === -1}
-                    className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-sm transition ${myVotes[it.id] === -1 ? "bg-rose-50 border-rose-200 text-rose-700" : "hover:bg-slate-50"}`}
-                    title="Vind ik niet leuk"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M2 4h4v10H2V4Zm6.3-2h7.36A3 3 0 0 1 18.6 4.43l1.03 5.67A3 3 0 0 1 16.69 14H13v2a3 3 0 0 1-3 3h-.5a1 1 0 0 1-1-1.2l.7-3.5A2 2 0 0 0 8.25 12L8 10.5V1.5c.08-.32.33-.5.3-.5Z"/>
-                    </svg>
-                    <span>{Number(it.dislikes) || 0}</span>
-                  </button>
-                </div>
-              </div>
-            </article>
+            <SmartLinkPreview
+  key={it.id}
+  item={it}
+  url={it.url}
+  status={it.status}              // mag mee, maar wordt genegeerd bij viewing-variant
+  price={it.price}
+  viewingAt={it.viewingAt}        // ⬅️ datum/tijd voor badge
+  badgeVariant="viewing"          // ⬅️ forceer datum/tijd i.p.v. status
+  liked={myVotes[it.id] === 1}
+  likesCount={Number(it.likes) || 0}
+  onToggleLike={() => castVote(it.id, 1)}
+  onOpenEditor={() => setEditorItem(it)}
+  onUpdate={(patch) => updateItem(it.id, patch)}
+  onDelete={() => remove(it.id)}
+/>
           ))}
           </div>
         </section>
