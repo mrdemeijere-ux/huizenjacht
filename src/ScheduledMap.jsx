@@ -184,13 +184,14 @@ React.useEffect(() => {
         />
         {points.map(p => (
           <Marker key={p.id || `${p.lat},${p.lng}`} position={[p.lat, p.lng]}>
-            <Tooltip permanent direction="top" offset={[0, -12]} opacity={1}>
-  <div className="flex items-center gap-2">
-    {/* Alleen kleine preview + prijs-badge */}
-    {p.url ? <MiniThumb url={p.url} size={32} /> : null}
+            <Tooltip permanent direction="top" offset={[0, -18]} opacity={1}>
+  <div className="flex flex-col items-center gap-1">
+    {/* Mini preview bovenaan, groter */}
+    {p.url ? <MiniThumb url={p.url} size={56} radius="rounded-lg" /> : null}
 
+    {/* Prijs-badge eronder */}
     {Number.isFinite(Number(p.price)) ? (
-      <span className="inline-flex items-center rounded-full px-2 py-1 text-[11px] text-white bg-emerald-600 tabular-nums">
+      <span className="inline-flex items-center rounded-full px-2 py-1 text-[12px] text-white bg-emerald-600 tabular-nums shadow-sm">
         {new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(Number(p.price))}
       </span>
     ) : null}
