@@ -11,17 +11,49 @@ L.Icon.Default.mergeOptions({
   shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
 });
 
-function FitBounds({ points, active }) {
+function FitToMarkers({ points, active }) {
   const map = useMap();
+
   useEffect(() => {
     if (!map) return;
-    setTimeout(() => map.invalidateSize(), 100); // tab switch fix
-    if (!points.length) { map.setView([52.1, 5.3], 6); return; } // NL overview
-    const bounds = L.latLngBounds(points.map(p => [p.lat, p.lng]));
-    map.fitBounds(bounds.pad(0.1), { animate: false });
-  }, [map, points, active]);
+
+    // Leaflet in verborgen tab → eerst size fixen
+    setTimeout(() => map.invalidateSize(), 150);
+
+    if (!points.length) {
+      map.setView([52.1, 5.3], 6); // NL overview
+      return;
+    }
+
+    if (points.length === 1) {
+      const p = points[0];
+      map.setView([p.lat, p.lng], 13, { animate: false });
+      return;
+    }
+
+    const coords = points.map(p => [p.lat, p.lng]);
+    const uniq = new Set(coords.map(([lat, lng]) => `${lat},${lng}`));
+    let bounds;
+
+    // Als alle punten exact gelijk zijn → kunstmatig klein boxje
+    if (uniq.size === 1) {
+      const [lat, lng] = coords[0];
+      bounds = L.latLngBounds([[lat - 0.01, lng - 0.01], [lat + 0.01, lng + 0.01]]);
+    } else {
+      bounds = L.latLngBounds(coords);
+    }
+
+    map.fitBounds(bounds.pad(0.15), { animate: false, maxZoom: 15 });
+  }, [
+    map,
+    active,
+    // dependency gebaseerd op afgeronde coords i.p.v. object-identiteit
+    points.map(p => `${p.lat.toFixed(5)},${p.lng.toFixed(5)}`).join("|"),
+  ]);
+
   return null;
 }
+
 
 export default function ScheduledMap({ items = [], active = true, heightClass = "h-[60vh]" }) {
   function toNum(v) {
