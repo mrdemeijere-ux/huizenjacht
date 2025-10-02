@@ -839,14 +839,24 @@ async function updateItem(id, patch) {
 )}
           </div>
           {scheduledVisible.length === 0 && (<div className="rounded-2xl border bg-white p-6 text-center text-slate-600">Geen ingeplande bezichtigingen.</div>)}
-          {scheduledVisible.map((it) => (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {scheduledVisible.map((it) => (
             <article key={`sched-${it.id}`} className="rounded-2xl border bg-white p-4 shadow-sm">
               <div className="flex flex-col gap-3">
                 <div className="grid gap-3 sm:grid-cols-[1fr,auto]">
                   <div className="grow">
                     <div className="flex flex-wrap items-center gap-2">
                       <h3 className="text-lg font-semibold">{it.title || "(Geen titel)"}</h3>
-                      <span className={badgeClass(it.status)}>{STATUS_OPTIONS.find((s) => s.value === it.status)?.label || it.status}</span>
+                      {it.viewingAt ? (
+                        <span className="inline-flex items-center rounded-full px-2 py-1 text-[11px] text-white bg-indigo-600">
+                          {formatViewing(it.viewingAt)}
+                        </span>
+                        ) : (it.status && it.status !== 'scheduled') ? (
+                        <span className={badgeClass(it.status)}>
+                        {STATUS_OPTIONS.find((s) => s.value === it.status)?.label || it.status}
+                        </span>
+                        ) : null}
+
                       {it.url && <LinkChip url={it.url} />}
                       {Number(it.price) > 0 && (<span className="ml-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">{formatEUR(it.price)}</span>)}
                       {averageRating(it.ratings) > 0 && (<span className="ml-1 rounded-full bg-yellow-50 px-2 py-0.5 text-xs font-medium text-amber-700">⭐ {averageRating(it.ratings)}/5</span>)}
@@ -899,6 +909,7 @@ async function updateItem(id, patch) {
               </div>
             </article>
           ))}
+          </div>
         </section>
 
         {/* Reviews Tab */}
