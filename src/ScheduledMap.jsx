@@ -19,12 +19,7 @@ const LINK_PREVIEW_ENDPOINT =
 
 function MiniThumb({ url, size = 32, radius = "rounded-md" }) {
   const [img, setImg] = useState(null);
-// Backwards-compat alias: oude referentie blijft werken
-function MiniLinkPreview({ url, variant }) {
-  // tooltip = klein, anders iets groter
-  const size = variant === "tooltip" ? 32 : 48;
-  return <MiniThumb url={url} size={size} />;
-}
+
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -206,7 +201,7 @@ React.useEffect(() => {
   <div className="text-sm max-w-[260px]">
     {/* Mini link preview bovenaan */}
     {p.url ? (
-      <MiniLinkPreview url={p.url} titleFallback={p.title} />
+      <MiniThumb url={p.url} size={48} />
     ) : (
       <div className="font-medium leading-snug">{p.title || "Woning"}</div>
     )}
