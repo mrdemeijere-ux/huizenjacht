@@ -13,47 +13,36 @@ L.Icon.Default.mergeOptions({
 // ---- Mini link preview (thumbnail + titel + host) ----
 // ---- Mini link preview (thumbnail + titel + host) ----
 // ---- Mini link preview (thumbnail + titel + host) ----
+// ---- Mini thumbnail (alleen afbeelding uit linkpreview) ----
 const LINK_PREVIEW_ENDPOINT =
   import.meta?.env?.VITE_LINK_PREVIEW_ENDPOINT || "/api/link-preview";
 
-function MiniLinkPreview({ url, titleFallback, variant = "popup" }) {
-  const [meta, setMeta] = useState(null);
+function MiniThumb({ url, size = 32, radius = "rounded-md" }) {
+  const [img, setImg] = useState(null);
 
   useEffect(() => {
     let alive = true;
-    async function run() {
+    (async () => {
       try {
         if (!url) return;
         const r = await fetch(`${LINK_PREVIEW_ENDPOINT}?url=${encodeURIComponent(url)}`);
         if (!r.ok) return;
         const j = await r.json();
-        if (alive) setMeta(j);
+        if (alive) setImg(j?.image || null);
       } catch {}
-    }
-    run();
+    })();
     return () => { alive = false; };
   }, [url]);
 
-  const title = meta?.title || titleFallback || url;
-  const image = meta?.image;
-  const host = (() => { try { return new URL(url).hostname.replace(/^www\./,''); } catch { return ""; } })();
-
-  // compact vs popup styling
-  const box = variant === "tooltip" ? "h-8 w-8" : "h-12 w-12";
-  const titleCls = variant === "tooltip" ? "text-xs font-medium leading-snug line-clamp-1" : "text-sm font-medium leading-snug line-clamp-2";
-  const hostCls = variant === "tooltip" ? "text-[10px] text-slate-500 truncate" : "text-xs text-slate-500 truncate";
-  const gap = variant === "tooltip" ? "gap-2" : "gap-3";
-
+  const box = `h-[${size}px] w-[${size}px]`; // tailwind-compatible via inline style fallback
   return (
-    <a href={url} target="_blank" rel="noreferrer" className={`flex items-center ${gap} no-underline`}>
-      <div className={`${box} rounded-md overflow-hidden bg-slate-100 border`}>
-        {image ? <img src={image} alt="" className="h-full w-full object-cover" /> : null}
-      </div>
-      <div className="min-w-0">
-        <div className={titleCls}>{title}</div>
-        <div className={hostCls}>{host}</div>
-      </div>
-    </a>
+    <div
+      className={`${radius} overflow-hidden bg-slate-100 border`}
+      style={{ height: size, width: size }}
+      aria-hidden
+    >
+      {img ? <img src={img} alt="" className="h-full w-full object-cover" /> : null}
+    </div>
   );
 }
 
@@ -196,31 +185,15 @@ React.useEffect(() => {
         {points.map(p => (
           <Marker key={p.id || `${p.lat},${p.lng}`} position={[p.lat, p.lng]}>
             <Tooltip permanent direction="top" offset={[0, -12]} opacity={1}>
-  <div className="flex flex-col gap-1 max-w-[220px]">
-    {/* Altijd zichtbare compacte mini-preview */}
-    {p.url ? (
-      <MiniLinkPreview url={p.url} titleFallback={p.title} variant="tooltip" />
-    ) : (
-      <div className="text-xs font-medium leading-snug">{p.title || "Woning"}</div>
-    )}
+  <div className="flex items-center gap-2">
+    {/* Alleen kleine preview + prijs-badge */}
+    {p.url ? <MiniThumb url={p.url} size={32} /> : null}
 
-    {/* Badges in dezelfde pill-stijl als de tiles */}
-    <div className="flex flex-wrap items-center gap-2">
-      {p.status ? (
-        <span
-          className={`inline-flex items-center rounded-full px-2 py-1 text-[11px] text-white
-            ${String(p.status).toLowerCase()==="verkocht" ? "bg-red-600" : "bg-blue-600"}`}
-        >
-          {p.status}
-        </span>
-      ) : null}
-
-      {Number.isFinite(Number(p.price)) ? (
-        <span className="inline-flex items-center rounded-full px-2 py-1 text-[11px] text-white bg-emerald-600 tabular-nums">
-          {new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(Number(p.price))}
-        </span>
-      ) : null}
-    </div>
+    {Number.isFinite(Number(p.price)) ? (
+      <span className="inline-flex items-center rounded-full px-2 py-1 text-[11px] text-white bg-emerald-600 tabular-nums">
+        {new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(Number(p.price))}
+      </span>
+    ) : null}
   </div>
 </Tooltip>
 
