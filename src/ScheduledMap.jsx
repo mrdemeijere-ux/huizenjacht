@@ -11,6 +11,7 @@ L.Icon.Default.mergeOptions({
   shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
 });
 // ---- Mini link preview (thumbnail + titel + host) ----
+// ---- Mini link preview (thumbnail + titel + host) ----
 const LINK_PREVIEW_ENDPOINT =
   import.meta?.env?.VITE_LINK_PREVIEW_ENDPOINT || "/api/link-preview";
 
@@ -48,6 +49,7 @@ function MiniLinkPreview({ url, titleFallback }) {
     </a>
   );
 }
+
 
 function FitToMarkers({ points, active }) {
   const map = useMap();
@@ -208,16 +210,16 @@ React.useEffect(() => {
     ) : null}
   </div>
 </Tooltip>
-            <Popup>
+  <Popup>
   <div className="text-sm max-w-[260px]">
-    {/* Mini link preview */}
+    {/* Mini link preview bovenaan */}
     {p.url ? (
       <MiniLinkPreview url={p.url} titleFallback={p.title} />
     ) : (
       <div className="font-medium leading-snug">{p.title || "Woning"}</div>
     )}
 
-    {/* Badges in pill-stijl (zoals tiles) */}
+    {/* Pills in dezelfde stijl als tiles */}
     <div className="mt-2 flex flex-wrap items-center gap-2">
       {p.status ? (
         <span
