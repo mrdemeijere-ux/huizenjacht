@@ -206,9 +206,37 @@ useEffect(() => {
   };
 }, [pointsKey]);
 
+// Huidig zoomniveau bijhouden en updaten tijdens zoomen
+const [mapZoom, setMapZoom] = useState(() => {
+  const z = mapRef.current?.getZoom?.();
+  return Number.isFinite(z) ? z : 12;
+});
+
+useEffect(() => {
+  const map = mapRef.current;
+  if (!map) return;
+
+  const onZoom = () => {
+    const z = map.getZoom();
+    if (Number.isFinite(z)) setMapZoom(z);
+  };
+
+  // initial sync + listeners
+  onZoom();
+  map.on("zoom", onZoom);
+  map.on("zoomend", onZoom);
+
+  return () => {
+    map.off("zoom", onZoom);
+    map.off("zoomend", onZoom);
+  };
+}, [pointsKey]);
+
+// Schaalfactor voor de tooltip (rond zoom 12 ≈ 1.0)
+const scale = Math.max(0.75, Math.min(1.6, 0.85 + 0.08 * (mapZoom - 12)));
 
   const center = points.length ? [points[0].lat, points[0].lng] : [52.1, 5.3];
-  const zoom = points.length ? 12 : 6;
+  const initialZoom = points.length ? 12 : 6;
 
   return (
     <div className={`w-full overflow-hidden rounded-2xl border border-slate-200 bg-white ${heightClass}`}>
@@ -234,16 +262,23 @@ useEffect(() => {
         {points.map(p => (
           <Marker key={p.id || `${p.lat},${p.lng}`} position={[p.lat, p.lng]}>
             <Tooltip permanent direction="top" offset={[0, -18]} opacity={1}>
-  <div className="flex flex-col items-center gap-1 max-w-[220px]">
-    {/* Mini preview bovenaan, groter */}
-    {p.url ? <MiniThumb url={p.url} size={72} radius="rounded-lg" /> : null}
+  <div
+    style={{
+      transform: `scale(${scale})`,
+      transformOrigin: "bottom center",
+      transition: "transform 120ms ease-out",
+      pointerEvents: "none", // tooltip onderschept geen gestures
+    }}
+  >
+    <div className="flex flex-col items-center gap-1 max-w-[220px]">
+      {p.url ? <MiniThumb url={p.url} size={72} radius="rounded-lg" /> : null}
 
-    {/* Prijs-badge eronder */}
-    {Number.isFinite(Number(p.price)) ? (
-      <span className="inline-flex items-center rounded-full px-2 py-1 text-[12px] text-white bg-emerald-600 tabular-nums shadow-sm">
-        {new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(Number(p.price))}
-      </span>
-    ) : null}
+      {Number.isFinite(Number(p.price)) ? (
+        <span className="inline-flex items-center rounded-full px-2 py-1 text-[12px] text-white bg-emerald-600 tabular-nums shadow-sm">
+          {new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(Number(p.price))}
+        </span>
+      ) : null}
+    </div>
   </div>
 </Tooltip>
 
