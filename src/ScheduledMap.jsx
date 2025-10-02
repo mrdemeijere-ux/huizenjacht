@@ -154,6 +154,37 @@ React.useEffect(() => {
   const t2 = setTimeout(fit, 250);
   return () => { clearTimeout(t1); clearTimeout(t2); };
 }, [pointsKey]);
+// ✅ Refit bij container-resize en device events (mobiel/iOS)
+useEffect(() => {
+  const map = mapRef.current;
+  if (!map) return;
+
+  const container = map.getContainer?.();
+  let ro;
+
+  // Refit wanneer de mapcontainer van grootte verandert (tab wissel, rotate, keyboard, etc.)
+  if (container && "ResizeObserver" in window) {
+    ro = new ResizeObserver(() => {
+      // kleine debounce voor iOS/Safari
+      setTimeout(fit, 50);
+      setTimeout(fit, 200);
+    });
+    ro.observe(container);
+  }
+
+  // Ook refitten bij visibility/oriëntatie events
+  const onVisibility = () => { setTimeout(fit, 50); setTimeout(fit, 200); };
+  const onOrientation = () => { setTimeout(fit, 100); setTimeout(fit, 250); };
+
+  document.addEventListener("visibilitychange", onVisibility);
+  window.addEventListener("orientationchange", onOrientation);
+
+  return () => {
+    if (ro) ro.disconnect();
+    document.removeEventListener("visibilitychange", onVisibility);
+    window.removeEventListener("orientationchange", onOrientation);
+  };
+}, [pointsKey]);
 
 
   const center = points.length ? [points[0].lat, points[0].lng] : [52.1, 5.3];
@@ -185,7 +216,7 @@ React.useEffect(() => {
         {points.map(p => (
           <Marker key={p.id || `${p.lat},${p.lng}`} position={[p.lat, p.lng]}>
             <Tooltip permanent direction="top" offset={[0, -18]} opacity={1}>
-  <div className="flex flex-col items-center gap-1">
+  <div className="flex flex-col items-center gap-1 max-w-[220px]">
     {/* Mini preview bovenaan, groter */}
     {p.url ? <MiniThumb url={p.url} size={72} radius="rounded-lg" /> : null}
 
