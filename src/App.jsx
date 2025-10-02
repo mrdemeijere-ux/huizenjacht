@@ -262,15 +262,17 @@ const priceText = (Number(price) > 0)
 
   return (
     <a href={url} target="_blank" rel="noopener noreferrer" className="block group">
-      <div className={`relative overflow-hidden rounded-2xl border border-slate-200 bg-white hover:shadow-sm transition ${confirmDelete ? "z-50" : ""}`}>
+      <div
+   className={`relative overflow-hidden rounded-2xl border border-slate-200 bg-white
+               shadow-sm hover:shadow-md ring-1 ring-slate-900/5 hover:ring-slate-900/10
+               transition-transform duration-150 will-change-transform hover:scale-[1.01]
+               ${confirmDelete ? "z-50" : ""}`}
+ >
+
         {/* Alleen de afbeelding, de hele tegel is klikbaar */}
         <div className="relative w-full aspect-[2/3] md:aspect-[2/3] bg-slate-100">
           {meta?.image ? (
-            <img
-              src={meta.image}
-              alt=""
-              className={`absolute inset-0 h-full w-full object-cover transition ${isSold ? "grayscale" : ""}`}
-            />
+            <img src={meta.image} alt="" className={`absolute inset-0 h-full w-full object-cover transition-transform duration-200 ${isSold ? "grayscale" : ""} group-hover:scale-[1.02]`} />
           ) : (
             <div className="absolute inset-0 grid place-items-center text-slate-400 text-xs">
               {subtitle}
@@ -393,16 +395,6 @@ function averageRating(r) {
   const vals = Object.values(r).filter((v) => Number(v) > 0);
   if (vals.length === 0) return 0;
   return Math.round((vals.reduce((a, b) => a + Number(b), 0) / vals.length) * 10) / 10;
-}
-
-function TopStatusBar({ liveStatus }) {
-  return (
-    <div className="sticky top-0 z-50 w-full border-b bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/60">
-      <div className="mx-auto max-w-6xl px-6 py-2 text-xs text-slate-700 flex items-center justify-between">
-        <div>⚡ Sync: <span className="font-medium">{liveStatus}</span> · Opslag: Firebase</div>
-      </div>
-    </div>
-  );
 }
 
 function formatViewing(dt) {
@@ -657,13 +649,12 @@ async function updateItem(id, patch) {
 
   // ===================== Render =====================
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white text-slate-900 pb-40 [padding-bottom:calc(theme(spacing.40)+env(safe-area-inset-bottom))]">
-      <TopStatusBar liveStatus={liveStatus} />
+    <div className="min-h-screen bg-gradient-to-b from-slate-50 via-white to-white text-slate-900 antialiased selection:bg-emerald-100 selection:text-emerald-900 pb-24 [padding-bottom:calc(theme(spacing.24)+env(safe-area-inset-bottom))]">
       <div className="mx-auto max-w-6xl p-6">
         <header className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <h1 className="text-2xl font-bold">Huizenjacht – MVP</h1>
-            <p className="text-sm text-slate-600">Beheer bezichtigingen, makelaars en routes. Realtime sync via Firebase.</p>
+            <p className="text-sm text-slate-600">Beheer bezichtigingen, makelaars en routes. Alles op één plek.</p>
           </div>
         </header>
 
