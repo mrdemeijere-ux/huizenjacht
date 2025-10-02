@@ -24,10 +24,30 @@ function FitBounds({ points, active }) {
 }
 
 export default function ScheduledMap({ items = [], active = true, heightClass = "h-[60vh]" }) {
-  const points = useMemo(
-    () => items.filter(i => Number.isFinite(i?.lat) && Number.isFinite(i?.lng)),
-    [items]
-  );
+  function toNum(v) {
+  if (v == null) return null;
+  const n = typeof v === "string" ? parseFloat(v.replace(",", ".")) : Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+const points = useMemo(() => {
+  return (items || [])
+    .map((i) => {
+      const lat = toNum(i.lat ?? i.latitude ?? i.coords?.lat);
+      const lng = toNum(i.lng ?? i.lon ?? i.longitude ?? i.coords?.lng ?? i.coords?.lon);
+      if (lat == null || lng == null) return null;
+      return {
+        id: i.id,
+        lat,
+        lng,
+        title: i.title,
+        url: i.url,
+        price: i.price,
+      };
+    })
+    .filter(Boolean);
+}, [items]);
+
   const center = points.length ? [points[0].lat, points[0].lng] : [52.1, 5.3];
   const zoom = points.length ? 12 : 6;
 
