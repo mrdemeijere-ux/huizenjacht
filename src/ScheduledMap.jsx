@@ -1,6 +1,6 @@
 // src/ScheduledMap.jsx
 import React, { useEffect, useMemo , useRef} from "react";
-import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Popup, Tooltip, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
@@ -132,6 +132,26 @@ React.useEffect(() => {
         />
         {points.map(p => (
           <Marker key={p.id || `${p.lat},${p.lng}`} position={[p.lat, p.lng]}>
+            <Tooltip permanent direction="top" offset={[0, -12]} opacity={1}>
+  <div className="flex items-center gap-2">
+    {/* Status-badge (rood bij 'verkocht') */}
+    {p.status ? (
+      <span
+        className={`inline-flex items-center rounded-full px-2 py-1 text-[11px] text-white
+          ${String(p.status).toLowerCase()==="verkocht" ? "bg-red-600" : "bg-blue-600"}`}
+      >
+        {p.status}
+      </span>
+    ) : null}
+
+    {/* Prijs-badge */}
+    {Number.isFinite(Number(p.price)) ? (
+      <span className="inline-flex items-center rounded-full px-2 py-1 text-[11px] text-white bg-emerald-600 tabular-nums">
+        {new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(Number(p.price))}
+      </span>
+    ) : null}
+  </div>
+</Tooltip>
             <Popup>
   <div className="text-sm max-w-[240px]">
     <div className="font-medium leading-snug line-clamp-2">
