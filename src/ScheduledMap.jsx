@@ -169,15 +169,14 @@ React.useEffect(() => {
       <MapContainer
   key={pointsKey}
   whenCreated={(map) => {
-    mapRef.current = map;
-    // eerste fit na mount
+  mapRef.current = map;
+  setTimeout(fit, 50);         // na mount
+  map.once("load", () => {     // na tiles laden
     setTimeout(fit, 50);
-    // nogmaals fit wanneer de kaart/tiles klaar zijn (iOS/Safari timing)
-    map.once("load", () => {
-      setTimeout(fit, 50);
-      setTimeout(fit, 200);
-    });
-  }}
+    setTimeout(fit, 200);
+  });
+}}
+
   center={center}
   zoom={zoom}
   scrollWheelZoom
