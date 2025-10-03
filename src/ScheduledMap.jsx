@@ -261,7 +261,11 @@ const scale = Math.max(0.75, Math.min(1.6, 0.85 + 0.08 * (mapZoom - 12)));
         />
         {points.map(p => (
           <Marker key={p.id || `${p.lat},${p.lng}`} position={[p.lat, p.lng]}>
-            <Tooltip permanent direction="top" offset={[0, -18]} opacity={1}>
+            <Tooltip   permanent
+  direction="top"
+  offset={[0, -18]}
+  opacity={1}
+  className="price-tooltip">
   <div
     style={{
       transform: `scale(${scale})`,

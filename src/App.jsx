@@ -649,7 +649,7 @@ async function updateItem(id, patch) {
 
   // ===================== Render =====================
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-50 via-white to-white text-slate-900 antialiased selection:bg-emerald-100 selection:text-emerald-900 pb-24 [padding-bottom:calc(theme(spacing.24)+env(safe-area-inset-bottom))]">
+    <div className="min-h-screen bg-gradient-to-b from-black via-slate-900 to-slate-900 text-slate-100 antialiased selection:bg-emerald-100 selection:text-emerald-900 pb-24 [padding-bottom:calc(theme(spacing.24)+env(safe-area-inset-bottom))]">
       <div className="mx-auto max-w-6xl p-6">
         <header className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>

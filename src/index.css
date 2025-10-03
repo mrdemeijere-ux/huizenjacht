@@ -1,1 +1,14 @@
 @import "tailwindcss";
+/* Transparante Leaflet-tooltips die we zelf stylen */
+.leaflet-tooltip.price-tooltip {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  padding: 0;            /* Leaflet zet standaard padding; die halen we weg */
+}
+
+/* Verberg het pijltje van de tooltip */
+.leaflet-tooltip.price-tooltip::before,
+.leaflet-tooltip.price-tooltip:before {
+  display: none;
+}
