@@ -654,7 +654,7 @@ async function updateItem(id, patch) {
         <header className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <h1 className="text-2xl font-bold">Huizenjacht – MVP</h1>
-            <p className="text-sm text-slate-600">Beheer bezichtigingen, makelaars en routes. Alles op één plek.</p>
+            <p className="text-sm text-slate-300">Beheer bezichtigingen, makelaars en routes. Alles op één plek.</p>
           </div>
         </header>
 
@@ -667,10 +667,10 @@ async function updateItem(id, patch) {
 
         {/* Tabs boven-form */}
         <nav className="mb-4 flex gap-2 text-sm">
-          <button onClick={() => setActiveTab("new")} className={`rounded-xl border px-3 py-2 ${activeTab==='new' ? 'bg-slate-900 text-white' : 'bg-white'}`}>Nieuwe woning</button>
-          <button onClick={() => setActiveTab("all")} className={`rounded-xl border px-3 py-2 ${activeTab==='all' ? 'bg-slate-900 text-white' : 'bg-white'}`}>Alle woningen</button>
-          <button onClick={() => setActiveTab("scheduled")} className={`rounded-xl border px-3 py-2 ${activeTab==='scheduled' ? 'bg-slate-900 text-white' : 'bg-white'}`}>Ingepland</button>
-          <button onClick={() => setActiveTab("reviews")} className={`rounded-xl border px-3 py-2 ${activeTab==='reviews' ? 'bg-slate-900 text-white' : 'bg-white'}`}>Reviews</button>
+          <button onClick={() => setActiveTab("new")} className={`rounded-xl border px-3 py-2 ${activeTab==='new' ? 'bg-white text-black shadow-sm' : 'bg-black/30 text-slate-200 hover:bg-black/40 border-slate-700'}`}>Nieuwe woning</button>
+          <button onClick={() => setActiveTab("all")} className={`rounded-xl border px-3 py-2 ${activeTab==='all' ? 'bg-white text-black shadow-sm' : 'bg-black/30 text-slate-200 hover:bg-black/40 border-slate-700'}`}>Alle woningen</button>
+          <button onClick={() => setActiveTab("scheduled")} className={`rounded-xl border px-3 py-2 ${activeTab==='scheduled' ? 'bg-white text-black shadow-sm' : 'bg-black/30 text-slate-200 hover:bg-black/40 border-slate-700'}`}>Ingepland</button>
+          <button onClick={() => setActiveTab("reviews")} className={`rounded-xl border px-3 py-2 ${activeTab==='reviews' ? 'bg-white text-black shadow-sm' : 'bg-black/30 text-slate-200 hover:bg-black/40 border-slate-700'}`}>Reviews</button>
         </nav>
 
         {/* Formulier */}
@@ -835,7 +835,7 @@ async function updateItem(id, patch) {
         <section className={`${activeTab==='scheduled' ? '' : 'hidden'} space-y-3`}>
                     {/* Kaart met ingeplande woningen */}
           <div className="mb-3">
-            <h3 className="px-2 pb-2 text-sm font-semibold text-slate-700">Kaart</h3>
+            <h3 className="px-2 pb-2 text-sm font-semibold text-slate-200">Kaart</h3>
             {activeTab === 'scheduled' && (
   <ScheduledMap
     items={scheduledVisible}
@@ -933,13 +933,13 @@ async function updateItem(id, patch) {
       </div>
 
       {/* Onderste tabbar (mobielvriendelijk) */}
-      <nav className="fixed bottom-0 left-0 right-0 z-40 border-t bg-white/95 backdrop-blur">
+      <nav className="fixed bottom-0 left-0 right-0 z-40 border-t border-slate-800 bg-black/70 backdrop-blur">
   <div className="mx-auto max-w-6xl grid grid-cols-4">
     {/* Nieuwe woning */}
     <button
       onClick={() => setActiveTab("new")}
       aria-pressed={activeTab === "new"}
-      className={`flex flex-col items-center justify-center gap-1 py-2 ${activeTab==='new' ? 'text-slate-900 font-semibold' : 'text-slate-600'}`}
+      className={`flex flex-col items-center justify-center gap-1 py-2 ${activeTab==='all' ? 'text-white font-semibold' : 'text-slate-400'}`}
     >
       <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
         <path d="M7 3h10a4 4 0 0 1 4 4v10a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V7a4 4 0 0 1 4-4m5 4a1 1 0 0 0-1 1v3H8a1 1 0 1 0 0 2h3v3a1 1 0 1 0 2 0v-3h3a1 1 0 1 0 0-2h-3V8a1 1 0 0 0-1-1Z"/>
