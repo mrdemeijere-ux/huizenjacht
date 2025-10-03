@@ -939,7 +939,7 @@ async function updateItem(id, patch) {
     <button
       onClick={() => setActiveTab("new")}
       aria-pressed={activeTab === "new"}
-      className={`flex flex-col items-center justify-center gap-1 py-2 ${activeTab==='all' ? 'text-white font-semibold' : 'text-slate-400'}`}
+      className={`flex flex-col items-center justify-center gap-1 py-2 ${activeTab==='new' ? 'text-white font-semibold' : 'text-slate-400'}`}
     >
       <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
         <path d="M7 3h10a4 4 0 0 1 4 4v10a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V7a4 4 0 0 1 4-4m5 4a1 1 0 0 0-1 1v3H8a1 1 0 1 0 0 2h3v3a1 1 0 1 0 2 0v-3h3a1 1 0 1 0 0-2h-3V8a1 1 0 0 0-1-1Z"/>
@@ -951,7 +951,7 @@ async function updateItem(id, patch) {
     <button
       onClick={() => setActiveTab("all")}
       aria-pressed={activeTab === "all"}
-      className={`flex flex-col items-center justify-center gap-1 py-2 ${activeTab==='all' ? 'text-slate-900 font-semibold' : 'text-slate-600'}`}
+      className={`flex flex-col items-center justify-center gap-1 py-2 ${activeTab==='all' ? 'text-white font-semibold' : 'text-slate-400'}`}
     >
       <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
         <path d="M7 6h13a1 1 0 1 1 0 2H7a1 1 0 0 1 0-2Zm0 5h13a1 1 0 1 1 0 2H7a1 1 0 0 1 0-2Zm0 5h13a1 1 0 1 1 0 2H7a1 1 0 0 1 0-2ZM3 6.75A1.75 1.75 0 1 0 3 10.25 1.75 1.75 0 0 0 3 6.75Zm0 5A1.75 1.75 0 1 0 3 15.25 1.75 1.75 0 0 0 3 11.75Z"/>
@@ -963,7 +963,7 @@ async function updateItem(id, patch) {
     <button
       onClick={() => setActiveTab("scheduled")}
       aria-pressed={activeTab === "scheduled"}
-      className={`flex flex-col items-center justify-center gap-1 py-2 ${activeTab==='scheduled' ? 'text-slate-900 font-semibold' : 'text-slate-600'}`}
+      className={`flex flex-col items-center justify-center gap-1 py-2 ${activeTab==='scheduled' ? 'text-white font-semibold' : 'text-slate-400'}`}
     >
       <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
         <path d="M7 2a1 1 0 0 1 1 1v1h8V3a1 1 0 1 1 2 0v1h1a3 3 0 0 1 3 3v11a3 3 0 0 1-3 3H5a3 3 0 0 1-3-3V7a3 3 0 0 1 3-3h1V3a1 1 0 0 1 1-1Zm13 8H4v8a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-8ZM5 9h14V7a1 1 0 0 0-1-1h-1v1a1 1 0 1 1-2 0V6H8v1a1 1 0 1 1-2 0V6H5a1 1 0 0 0-1 1v2Z"/>
@@ -975,7 +975,7 @@ async function updateItem(id, patch) {
     <button
       onClick={() => setActiveTab("reviews")}
       aria-pressed={activeTab === "reviews"}
-      className={`flex flex-col items-center justify-center gap-1 py-2 ${activeTab==='reviews' ? 'text-slate-900 font-semibold' : 'text-slate-600'}`}
+      className={`flex flex-col items-center justify-center gap-1 py-2 ${activeTab==='reviews' ? 'text-white font-semibold' : 'text-slate-400'}`}
     >
       <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
         <path d="M12 3.5 9.6 9H4.5l4.2 3.1L7.5 17 12 14.2 16.5 17l-1.2-4.9 4.2-3.1h-5.1L12 3.5Z"/>
